@@ -1,51 +1,212 @@
 use std::io;
 
-#[derive(Clone)]
-enum Cell {
-    Empty,
+const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
+
+// error messages
+const BAD_INPUT: &str = "bad input";
+const OUT_OF_RANGE: &str = "out of range";
+const CELL_TAKEN: &str = "cell taken";
+
+enum State {
+    GameOver,
+    Continue,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Player {
     User,
     Comp,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum Cell {
+    Empty,
+    Full(Player),
+}
+
 struct Board {
     cells: Vec<Cell>,
+    size: usize,
 }
 
 impl Board {
-    fn new() -> Board {
+    fn new(size: usize) -> Board {
         Board {
-            cells: vec![Cell::Empty; 9],
+            cells: vec![Cell::Empty; (size * size) as usize],
+            size,
         }
     }
-    fn ended(&self) -> bool {
-        // TODO use filter
-        for c in &self.cells {
-            if let Cell::Empty = c {
-                return false;
+
+    fn display(&self) {
+        println!("\n  {}", &ALPHABET.to_string()[..self.size]);
+        for i in 0..self.size {
+            let mut row = String::with_capacity(self.size as usize);
+            row.push_str(&format!("{:<2}", i));
+            for j in 0..self.size {
+                row.push(match &self.cells[i * self.size + j] {
+                    Cell::Empty => '.',
+                    Cell::Full(player) => match player {
+                        Player::User => 'o',
+                        Player::Comp => 'x',
+                    },
+                });
+            }
+            println!("{}", row);
+        }
+        println!("\n");
+    }
+
+    // Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move
+    fn enter_move(
+        &mut self,
+        row: usize,
+        col: usize,
+        player: Player,
+    ) -> Result<Option<Player>, &str> {
+        let idx = row * self.size + col;
+        if idx > self.size * self.size - 1 {
+            return Err(OUT_OF_RANGE);
+        }
+        match &self.cells[idx] {
+            Cell::Empty => self.cells[idx] = Cell::Full(player),
+            _ => return Err(CELL_TAKEN),
+        }
+
+        if self.move_wins_game(row, col, player) {
+            return Ok(Some(player));
+        }
+
+        Ok(None)
+    }
+
+    fn filter_cells_by_player_and_pos(
+        &self,
+        player: Player,
+        comp: &Fn(usize) -> bool,
+    ) -> Vec<(usize, &Cell)> {
+        self.cells
+            .iter()
+            .enumerate()
+            .filter(|&(i, x)| {
+                comp(i)
+                    && match x {
+                        Cell::Full(cplayer) => &player == cplayer,
+                        _ => false,
+                    }
+            })
+            .collect()
+    }
+
+    fn move_wins_game(&self, r: usize, c: usize, player: Player) -> bool {
+        // check row
+        if self
+            .filter_cells_by_player_and_pos(player, &|i| i / self.size == r)
+            .len()
+            == self.size
+        {
+            return true;
+        }
+
+        // check col
+        if self
+            .filter_cells_by_player_and_pos(player, &|i| i % self.size == c)
+            .len()
+            == self.size
+        {
+            return true;
+        }
+
+        // check \ diagonal if relevant
+        if r == c {
+            if self
+                .filter_cells_by_player_and_pos(player, &|i| i % self.size == i / self.size)
+                .len()
+                == self.size
+            {
+                return true;
             }
         }
-        true
+
+        // check / diagonal if relevant
+        if r + c == self.size - 1 {
+            if self
+                .filter_cells_by_player_and_pos(player, &|i| {
+                    (i % self.size) + (i / self.size) == self.size - 1
+                })
+                .len()
+                == self.size
+            {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
-fn get_move() -> io::Result<String> {
+// Accept player input from stdin, parse into (row, col) indexes
+fn get_move() -> Result<(usize, usize), &'static str> {
     let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let player_move = input.trim().to_string();
+    if let Err(_) = io::stdin().read_line(&mut input) {
+        return Err(BAD_INPUT);
+    }
+    // at least 2 indices + \n
+    if input.len() < 3 {
+        return Err(BAD_INPUT);
+    }
+    let player_move = input.trim();
 
-    Ok(player_move)
+    let col = match ALPHABET.find(player_move.chars().nth(0).unwrap()) {
+        Some(idx) => idx,
+        None => return Err(BAD_INPUT),
+    };
+
+    let row = match player_move.chars().nth(1).unwrap().to_digit(10) {
+        Some(idx) => idx as usize,
+        None => return Err(BAD_INPUT),
+    };
+
+    Ok((row, col))
+}
+
+fn handle_move_result(move_result: Result<Option<Player>, &str>) -> Result<State, &str> {
+    match move_result {
+        Ok(Some(player)) => {
+            println!("Game over, {:?} is the winner!", player);
+            return Ok(State::GameOver);
+        }
+        Ok(None) => (),
+        Err(msg) => {
+            println!("Oops, illegal move: {}", msg);
+            return Err(msg);
+        }
+    }
+    Ok(State::Continue)
 }
 
 fn main() -> io::Result<()> {
-    let board = Board::new();
-    loop {
-        let player_move = get_move()?;
-        // TODO game logic
-        println!("You typed: {}", player_move);
+    let mut board = Board::new(3);
 
-        if board.ended() {
-            println!("Game over");
-            return Ok(());
+    println!("IT'S TIC-TAC-TOEEEEEEE TIIIIIIIIMEEEE!!!!!!");
+    loop {
+        board.display();
+        println!("Enter a move (like \"a0\"):");
+
+        let (row, col) = match get_move() {
+            Ok((row, col)) => (row, col),
+            Err(_) => {
+                println!("Oops, enter valid input");
+                continue;
+            }
+        };
+
+        let move_result = board.enter_move(row, col, Player::User);
+        match handle_move_result(move_result) {
+            Ok(State::GameOver) => return Ok(()),
+            Ok(State::Continue) => (),
+            Err(_) => continue,
         }
+
+        // TODO computer moves
     }
 }
