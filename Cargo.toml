@@ -1,5 +1,5 @@
 [package]
-name = "MCTS-tic-tac-toe"
+name = "mcts-tic-tac-toe"
 version = "0.1.0"
 authors = ["Nicolas Hahn <nicolas@stonespring.org>"]
 edition = "2018"

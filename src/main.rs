@@ -1,3 +1,4 @@
+/// Monte Carlo tree search Tic-Tac-Toe agent and command line interface for playing against it.
 use std::io;
 
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
@@ -7,29 +8,78 @@ const BAD_INPUT: &str = "bad input";
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 
-enum State {
-    GameOver,
-    Continue,
-}
-
+/// The type of player
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Player {
-    User,
-    Comp,
+    // You
+    Human,
+    // MonteCarloAgent (or other AI agent)
+    AI,
 }
 
+/// Represents a single cell of the tic-tac-toe board
 #[derive(Clone, Copy, Debug)]
 enum Cell {
     Empty,
     Full(Player),
 }
 
+/// Store the size and state of the tic-tac-toe board
 struct Board {
-    cells: Vec<Cell>,
+    // dimension of the board (total number of cells = size * size)
     size: usize,
+    // for example: 3x3 grid would be a vec of length 9
+    cells: Vec<Cell>,
+}
+
+// TODO eventually store interior node scores here so we don't need to check entire tree of
+// possible games at every turn
+struct MonteCarloAgent {}
+
+impl MonteCarloAgent {
+    fn new() -> MonteCarloAgent {
+        MonteCarloAgent {}
+    }
+
+    /// Agent scores a given move by playing it out until it reaches all end states, and scores it:
+    /// score = (number of wins/number of overall end states)
+    fn score_move(&self, board: &Board, r: usize, c: usize) -> f64 {
+        // TODO
+        // if this is an end state(leaf node):
+        // score = 1 if we won, 0 if we lose
+
+        // if this is an intermediate node:
+        // recurse to the possible subsequent moves and score them
+        // score for this move = # of wins / # of possible end states that stem from this move
+
+        0.5
+    }
+
+    /// Agent chooses the best available move
+    fn choose_move(&self, board: &Board) -> (usize, usize) {
+        let mut valid_moves = Vec::new();
+        for (i, cell) in board.cells.iter().enumerate() {
+            if let Cell::Empty = cell {
+                valid_moves.push((i / board.size, i % board.size));
+            }
+        }
+
+        let mut max_score = 0.0;
+        let mut best_rc = valid_moves[0];
+        for (r, c) in valid_moves {
+            let score = self.score_move(board, r, c);
+            if score > max_score {
+                best_rc = (r, c);
+                max_score = score;
+            }
+        }
+
+        best_rc
+    }
 }
 
 impl Board {
+    /// Return a new Board of (size * size) cells
     fn new(size: usize) -> Board {
         Board {
             cells: vec![Cell::Empty; (size * size) as usize],
@@ -37,7 +87,19 @@ impl Board {
         }
     }
 
+    /// Print the board to stdout with the column and row labels:
+    ///
+    ///   abc
+    /// 0 ...
+    /// 1 ...
+    /// 2 ...
+    ///
+    /// NOTE: this will fail with self.size > 10, need to implement smarter indexing
     fn display(&self) {
+        if self.size > 10 {
+            println!("The board is too large to print with indices");
+            return;
+        }
         println!("\n  {}", &ALPHABET.to_string()[..self.size]);
         for i in 0..self.size {
             let mut row = String::with_capacity(self.size as usize);
@@ -46,8 +108,8 @@ impl Board {
                 row.push(match &self.cells[i * self.size + j] {
                     Cell::Empty => '.',
                     Cell::Full(player) => match player {
-                        Player::User => 'o',
-                        Player::Comp => 'x',
+                        Player::Human => 'o',
+                        Player::AI => 'x',
                     },
                 });
             }
@@ -126,6 +188,8 @@ impl Board {
 }
 
 /// Accept player input from stdin, parse into (row, col) indexes
+/// Columns are letter indexes, rows are integers
+/// Example: "a2" means column 0, row 2
 fn get_move() -> Result<(usize, usize), &'static str> {
     let mut input = String::new();
     if let Err(_) = io::stdin().read_line(&mut input) {
@@ -150,27 +214,15 @@ fn get_move() -> Result<(usize, usize), &'static str> {
     Ok((row, col))
 }
 
-fn handle_move_result(move_result: Result<Option<Player>, &str>) -> Result<State, &str> {
-    match move_result {
-        Ok(Some(player)) => {
-            println!("Game over, {:?} is the winner!", player);
-            return Ok(State::GameOver);
-        }
-        Ok(None) => (),
-        Err(msg) => {
-            println!("Oops, illegal move: {}", msg);
-            return Err(msg);
-        }
-    }
-    Ok(State::Continue)
-}
-
 fn main() -> io::Result<()> {
     let mut board = Board::new(3);
 
-    println!("IT'S TIC-TAC-TOEEEEEEE TIIIIIIIIMEEEE!!!!!!");
+    println!("IT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
+    board.display();
+
+    let ai = MonteCarloAgent::new();
+
     loop {
-        board.display();
         println!("Enter a move (like \"a0\"):");
 
         let (row, col) = match get_move() {
@@ -181,14 +233,31 @@ fn main() -> io::Result<()> {
             }
         };
 
-        let move_result = board.enter_move(row, col, Player::User);
-        match handle_move_result(move_result) {
-            Ok(State::GameOver) => return Ok(()),
-            Ok(State::Continue) => (),
-            // go back to beginning of loop and let player enter another move
-            Err(_) => continue,
-        }
+        match board.enter_move(row, col, Player::Human) {
+            Ok(Some(_)) => {
+                board.display();
+                println!("Game over, you are the winner!");
+                return Ok(());
+            }
+            // show board and continue to AI's move
+            Ok(None) => board.display(),
+            // back to start of loop to let user enter a different move
+            Err(msg) => {
+                println!("Oops, illegal move: {}", msg);
+                continue;
+            }
+        };
 
-        // TODO computer moves
+        println!("AI is thinking...");
+        let (row, col) = ai.choose_move(&board);
+
+        match board.enter_move(row, col, Player::AI) {
+            Ok(Some(_)) => {
+                board.display();
+                println!("Game over, you lost!");
+                return Ok(());
+            }
+            _ => board.display(),
+        };
     }
 }
