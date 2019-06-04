@@ -56,7 +56,7 @@ impl Board {
         println!("\n");
     }
 
-    // Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move
+    /// Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move
     fn enter_move(
         &mut self,
         row: usize,
@@ -79,72 +79,53 @@ impl Board {
         Ok(None)
     }
 
-    fn filter_cells_by_player_and_pos(
-        &self,
-        player: Player,
-        comp: &Fn(usize) -> bool,
-    ) -> Vec<(usize, &Cell)> {
-        self.cells
+    /// Return if the line defined by the filter_fn is filled with cells of type player
+    fn line_is_filled_with_player(&self, player: Player, filter_fn: &Fn(usize) -> bool) -> bool {
+        let matching_cells: Vec<(usize, &Cell)> = self
+            .cells
             .iter()
             .enumerate()
             .filter(|&(i, x)| {
-                comp(i)
+                filter_fn(i)
                     && match x {
                         Cell::Full(cplayer) => &player == cplayer,
                         _ => false,
                     }
             })
-            .collect()
+            .collect();
+
+        matching_cells.len() == self.size
     }
 
+    /// Did the last move played at (r,c) by player win the game?
     fn move_wins_game(&self, r: usize, c: usize, player: Player) -> bool {
         // check row
-        if self
-            .filter_cells_by_player_and_pos(player, &|i| i / self.size == r)
-            .len()
-            == self.size
-        {
+        if self.line_is_filled_with_player(player, &|i| i / self.size == r) {
             return true;
         }
 
         // check col
-        if self
-            .filter_cells_by_player_and_pos(player, &|i| i % self.size == c)
-            .len()
-            == self.size
-        {
+        if self.line_is_filled_with_player(player, &|i| i % self.size == c) {
             return true;
         }
 
         // check \ diagonal if relevant
-        if r == c {
-            if self
-                .filter_cells_by_player_and_pos(player, &|i| i % self.size == i / self.size)
-                .len()
-                == self.size
-            {
-                return true;
-            }
+        if self.line_is_filled_with_player(player, &|i| i % self.size == i / self.size) {
+            return true;
         }
 
         // check / diagonal if relevant
-        if r + c == self.size - 1 {
-            if self
-                .filter_cells_by_player_and_pos(player, &|i| {
-                    (i % self.size) + (i / self.size) == self.size - 1
-                })
-                .len()
-                == self.size
-            {
-                return true;
-            }
+        if self.line_is_filled_with_player(player, &|i| {
+            (i % self.size) + (i / self.size) == self.size - 1
+        }) {
+            return true;
         }
 
         false
     }
 }
 
-// Accept player input from stdin, parse into (row, col) indexes
+/// Accept player input from stdin, parse into (row, col) indexes
 fn get_move() -> Result<(usize, usize), &'static str> {
     let mut input = String::new();
     if let Err(_) = io::stdin().read_line(&mut input) {
@@ -204,6 +185,7 @@ fn main() -> io::Result<()> {
         match handle_move_result(move_result) {
             Ok(State::GameOver) => return Ok(()),
             Ok(State::Continue) => (),
+            // go back to beginning of loop and let player enter another move
             Err(_) => continue,
         }
 
