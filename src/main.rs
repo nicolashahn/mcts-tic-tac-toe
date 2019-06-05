@@ -108,11 +108,14 @@ impl MonteCarloAgent {
     /// Scores a given move by playing it out recursively alternating between the AI and Human
     /// players taking turns until it reaches all end states
     /// return (number of wins/number of overall end states)
-    fn score_move(&self, board: &Board, player: Player, r: usize, c: usize) -> Outcomes {
+    fn score_move(&self, board: &mut Board, player: Player, r: usize, c: usize) -> Outcomes {
         // create a new board with the move in question played
-        let mut new_board = board.clone();
-        if let Ok(Ended(endstate)) = new_board.enter_move(r, c, player) {
+        if let Ok(Ended(endstate)) = board.enter_move(r, c, player) {
+            // backtrack once we're done calculating
+            board.undo_move(r, c);
             // Wins get score of 1, losses -1, draws 0
+            // TODO weight outcomes more heavily if they're closer in the tree
+            // (less steps to get here from the original choose_move() step)
             return match endstate {
                 Winner(AI) => Outcomes::new(1, 1),
                 Winner(Human) => Outcomes::new(-1, 1),
@@ -127,9 +130,12 @@ impl MonteCarloAgent {
 
         // recurse to the possible subsequent moves and score them
         let mut total = Outcomes::new(0, 0);
-        for (r, c) in &valid_moves {
-            total = total + self.score_move(&new_board, opp, *r, *c);
+        for (new_r, new_c) in &valid_moves {
+            total = total + self.score_move(board, opp, *new_r, *new_c);
         }
+
+        // backtrack once we're done calculating
+        board.undo_move(r, c);
 
         // score for this move = # of wins / # of possible end states that stem from this move
         total
@@ -141,8 +147,11 @@ impl MonteCarloAgent {
 
         let mut max_score = Outcomes::new(-((2 as isize).pow(62)), 1);
         let mut best_rc = valid_moves[0];
+        // need a mutable copy here so we can use recursive backtracking without needing to make
+        // a copy of the board at each step
+        let mut theoretical_board = board.clone();
         for (r, c) in valid_moves {
-            let score = self.score_move(board, AI, r, c);
+            let score = self.score_move(&mut theoretical_board, AI, r, c);
             println!("{} {} {:?}", r, c, score);
             if score.as_f64() > max_score.as_f64() {
                 best_rc = (r, c);
@@ -192,6 +201,10 @@ impl Board {
             println!("{}", row);
         }
         println!("\n");
+    }
+
+    fn undo_move(&mut self, r: usize, c: usize) {
+        self.cells[r * self.size + c] = Empty;
     }
 
     fn no_moves_remaining(&self) -> bool {
@@ -329,7 +342,6 @@ fn main() -> io::Result<()> {
                 rc = ai.choose_move(&board);
             }
         }
-        println!("Enter a move (like \"a0\"):");
 
         let (row, col) = rc;
         match board.enter_move(row, col, player) {
