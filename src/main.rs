@@ -17,6 +17,16 @@ enum Player {
     AI,
 }
 
+impl Player {
+    /// Get the opposite type (opponent) of this player
+    fn get_opp(&self) -> Player {
+        match self {
+            Player::Human => Player::AI,
+            Player::AI => Player::Human,
+        }
+    }
+}
+
 /// Represents a single cell of the tic-tac-toe board
 #[derive(Clone, Copy, Debug)]
 enum Cell {
@@ -25,6 +35,7 @@ enum Cell {
 }
 
 /// Store the size and state of the tic-tac-toe board
+#[derive(Clone, Debug)]
 struct Board {
     // dimension of the board (total number of cells = size * size)
     size: usize,
@@ -41,33 +52,54 @@ impl MonteCarloAgent {
         MonteCarloAgent {}
     }
 
-    /// Agent scores a given move by playing it out until it reaches all end states, and scores it:
-    /// score = (number of wins/number of overall end states)
-    fn score_move(&self, board: &Board, r: usize, c: usize) -> f64 {
-        // TODO
-        // if this is an end state(leaf node):
-        // score = 1 if we won, 0 if we lose
-
-        // if this is an intermediate node:
-        // recurse to the possible subsequent moves and score them
-        // score for this move = # of wins / # of possible end states that stem from this move
-
-        0.5
-    }
-
-    /// Agent chooses the best available move
-    fn choose_move(&self, board: &Board) -> (usize, usize) {
+    fn get_valid_moves(&self, board: &Board) -> Vec<(usize, usize)> {
         let mut valid_moves = Vec::new();
         for (i, cell) in board.cells.iter().enumerate() {
             if let Cell::Empty = cell {
                 valid_moves.push((i / board.size, i % board.size));
             }
         }
+        return valid_moves;
+    }
+
+    /// Scores a given move by playing it out recursively alternating between the AI and Human
+    /// players taking turns until it reaches all end states
+    /// return (number of wins/number of overall end states)
+    fn score_move(&self, board: &Board, player: Player, r: usize, c: usize) -> f64 {
+        // create a new board with the move in question played
+        let mut new_board = board.clone();
+        if let Ok(Some(_)) = new_board.enter_move(r, c, player) {
+            // if someone won, return the score
+            return match player {
+                Player::AI => 1.0,
+                Player::Human => 0.0,
+            };
+        }
+
+        // if this is an intermediate node:
+        // get next possible moves for the opposing player
+        let valid_moves = self.get_valid_moves(board);
+        let opp = player.get_opp();
+
+        // recurse to the possible subsequent moves and score them
+        let mut total = 0.0;
+        for (r, c) in &valid_moves {
+            total += self.score_move(&new_board, opp, *r, *c);
+        }
+
+        // score for this move = # of wins / # of possible end states that stem from this move
+        total / (valid_moves.len() as f64)
+    }
+
+    /// Agent chooses the best available move
+    fn choose_move(&self, board: &Board) -> (usize, usize) {
+        let valid_moves = self.get_valid_moves(board);
 
         let mut max_score = 0.0;
         let mut best_rc = valid_moves[0];
         for (r, c) in valid_moves {
-            let score = self.score_move(board, r, c);
+            let score = self.score_move(board, Player::AI, r, c);
+            println!("{} {} {}", r, c, score);
             if score > max_score {
                 best_rc = (r, c);
                 max_score = score;
