@@ -2,6 +2,11 @@
 use std::io;
 use std::ops::Add;
 
+use Cell::{Empty, Full};
+use EndState::{Draw, Winner};
+use GameState::{Ended, Ongoing};
+use Player::{Human, AI};
+
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
 // error messages
@@ -9,19 +14,19 @@ const BAD_INPUT: &str = "bad input";
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 
-/// At a given game state, how many wins are possible out of the total number of playouts?
+/// At a given game state, the summed wins/losses/draws and total playouts
 #[derive(Debug, PartialEq, PartialOrd)]
 struct Outcomes {
-    wins: isize,
+    score: isize,
     total: isize,
 }
 
 impl Outcomes {
-    fn new(wins: isize, total: isize) -> Outcomes {
-        Outcomes { wins, total }
+    fn new(score: isize, total: isize) -> Outcomes {
+        Outcomes { score, total }
     }
     fn as_f64(&self) -> f64 {
-        return self.wins as f64 / self.total as f64;
+        return self.score as f64 / self.total as f64;
     }
 }
 
@@ -30,7 +35,7 @@ impl Add for Outcomes {
 
     fn add(self, other: Self) -> Self {
         Self {
-            wins: self.wins + other.wins,
+            score: self.score + other.score,
             total: self.total + other.total,
         }
     }
@@ -57,10 +62,10 @@ enum Player {
 
 impl Player {
     /// Get the opposite type (opponent) of this player
-    fn get_opp(&self) -> Player {
+    fn get_opponent(&self) -> Player {
         match self {
-            Player::Human => Player::AI,
-            Player::AI => Player::Human,
+            Human => AI,
+            AI => Human,
         }
     }
 }
@@ -93,7 +98,7 @@ impl MonteCarloAgent {
     fn get_valid_moves(&self, board: &Board) -> Vec<(usize, usize)> {
         let mut valid_moves = Vec::new();
         for (i, cell) in board.cells.iter().enumerate() {
-            if let Cell::Empty = cell {
+            if let Empty = cell {
                 valid_moves.push((i / board.size, i % board.size));
             }
         }
@@ -106,19 +111,19 @@ impl MonteCarloAgent {
     fn score_move(&self, board: &Board, player: Player, r: usize, c: usize) -> Outcomes {
         // create a new board with the move in question played
         let mut new_board = board.clone();
-        if let Ok(GameState::Ended(endstate)) = new_board.enter_move(r, c, player) {
+        if let Ok(Ended(endstate)) = new_board.enter_move(r, c, player) {
             // Wins get score of 1, losses -1, draws 0
             return match endstate {
-                EndState::Winner(Player::AI) => Outcomes::new(1, 1),
-                EndState::Winner(Player::Human) => Outcomes::new(-1, 1),
-                EndState::Draw => Outcomes::new(0, 1),
+                Winner(AI) => Outcomes::new(1, 1),
+                Winner(Human) => Outcomes::new(-1, 1),
+                Draw => Outcomes::new(0, 1),
             };
         }
 
         // if this is an intermediate node:
         // get next possible moves for the opposing player
         let valid_moves = self.get_valid_moves(board);
-        let opp = player.get_opp();
+        let opp = player.get_opponent();
 
         // recurse to the possible subsequent moves and score them
         let mut total = Outcomes::new(0, 0);
@@ -137,7 +142,7 @@ impl MonteCarloAgent {
         let mut max_score = Outcomes::new(-((2 as isize).pow(62)), 1);
         let mut best_rc = valid_moves[0];
         for (r, c) in valid_moves {
-            let score = self.score_move(board, Player::AI, r, c);
+            let score = self.score_move(board, AI, r, c);
             println!("{} {} {:?}", r, c, score);
             if score.as_f64() > max_score.as_f64() {
                 best_rc = (r, c);
@@ -153,7 +158,7 @@ impl Board {
     /// Return a new Board of (size * size) cells
     fn new(size: usize) -> Board {
         Board {
-            cells: vec![Cell::Empty; (size * size) as usize],
+            cells: vec![Empty; (size * size) as usize],
             size,
         }
     }
@@ -177,10 +182,10 @@ impl Board {
             row.push_str(&format!("{:<2}", i));
             for j in 0..self.size {
                 row.push(match &self.cells[i * self.size + j] {
-                    Cell::Empty => '.',
-                    Cell::Full(player) => match player {
-                        Player::Human => 'o',
-                        Player::AI => 'x',
+                    Empty => '.',
+                    Full(player) => match player {
+                        Human => 'o',
+                        AI => 'x',
                     },
                 });
             }
@@ -194,7 +199,7 @@ impl Board {
             .cells
             .iter()
             .filter(|c| match c {
-                Cell::Empty => true,
+                Empty => true,
                 _ => false,
             })
             .collect();
@@ -208,19 +213,19 @@ impl Board {
             return Err(OUT_OF_RANGE);
         }
         match &self.cells[idx] {
-            Cell::Empty => self.cells[idx] = Cell::Full(player),
+            Empty => self.cells[idx] = Full(player),
             _ => return Err(CELL_TAKEN),
         }
 
         if self.move_wins_game(row, col, player) {
-            return Ok(GameState::Ended(EndState::Winner(player)));
+            return Ok(Ended(Winner(player)));
         }
 
         if self.no_moves_remaining() {
-            return Ok(GameState::Ended(EndState::Draw));
+            return Ok(Ended(Draw));
         }
 
-        Ok(GameState::Ongoing)
+        Ok(Ongoing)
     }
 
     /// Return if the line defined by the filter_fn is filled with cells of type player
@@ -232,7 +237,7 @@ impl Board {
             .filter(|&(i, x)| {
                 filter_fn(i)
                     && match x {
-                        Cell::Full(cplayer) => &player == cplayer,
+                        Full(cplayer) => &player == cplayer,
                         _ => false,
                     }
             })
@@ -304,11 +309,11 @@ fn main() -> io::Result<()> {
 
     let ai = MonteCarloAgent::new();
 
-    let mut player = Player::Human;
+    let mut player = Human;
     loop {
         let rc: (usize, usize);
         match player {
-            Player::Human => {
+            Human => {
                 println!("Enter a move (like \"a0\"):");
 
                 rc = match get_move() {
@@ -319,7 +324,7 @@ fn main() -> io::Result<()> {
                     }
                 };
             }
-            Player::AI => {
+            AI => {
                 println!("AI is thinking...");
                 rc = ai.choose_move(&board);
             }
@@ -328,22 +333,22 @@ fn main() -> io::Result<()> {
 
         let (row, col) = rc;
         match board.enter_move(row, col, player) {
-            Ok(GameState::Ended(endstate)) => {
+            Ok(Ended(endstate)) => {
                 board.display();
                 match endstate {
-                    EndState::Winner(Player::Human) => println!("Game over, you are the winner!"),
-                    EndState::Winner(Player::AI) => println!("Game over, you lost!"),
-                    EndState::Draw => println!("Game over, it's a draw!"),
+                    Winner(Human) => println!("Game over, you are the winner!"),
+                    Winner(AI) => println!("Game over, you lost!"),
+                    Draw => println!("Game over, it's a draw!"),
                 }
                 return Ok(());
             }
-            Ok(GameState::Ongoing) => board.display(),
+            Ok(Ongoing) => board.display(),
             // back to start of loop to let user enter a different move
             Err(msg) => {
                 println!("Oops, illegal move: {}", msg);
                 continue;
             }
         };
-        player = player.get_opp();
+        player = player.get_opponent();
     }
 }
