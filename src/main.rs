@@ -1,5 +1,6 @@
 /// Monte Carlo tree search Tic-Tac-Toe agent and command line interface for playing against it.
 use std::io;
+use std::ops::Add;
 
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
@@ -7,6 +8,34 @@ const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 const BAD_INPUT: &str = "bad input";
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
+
+/// At a given game state, how many wins are possible out of the total number of playouts?
+/// Wins get score of 1, draws 0, losses -1
+#[derive(Debug, PartialEq, PartialOrd)]
+struct Outcomes {
+    wins: isize,
+    total: isize,
+}
+
+impl Outcomes {
+    fn new(wins: isize, total: isize) -> Outcomes {
+        Outcomes { wins, total }
+    }
+    fn as_f64(&self) -> f64 {
+        return self.wins as f64 / self.total as f64;
+    }
+}
+
+impl Add for Outcomes {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            wins: self.wins + other.wins,
+            total: self.total + other.total,
+        }
+    }
+}
 
 /// The type of player
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -65,14 +94,14 @@ impl MonteCarloAgent {
     /// Scores a given move by playing it out recursively alternating between the AI and Human
     /// players taking turns until it reaches all end states
     /// return (number of wins/number of overall end states)
-    fn score_move(&self, board: &Board, player: Player, r: usize, c: usize) -> f64 {
+    fn score_move(&self, board: &Board, player: Player, r: usize, c: usize) -> Outcomes {
         // create a new board with the move in question played
         let mut new_board = board.clone();
         if let Ok(Some(_)) = new_board.enter_move(r, c, player) {
             // if someone won, return the score
             return match player {
-                Player::AI => 1.0,
-                Player::Human => 0.0,
+                Player::AI => Outcomes::new(1, 1),
+                Player::Human => Outcomes::new(0, 1),
             };
         }
 
@@ -82,25 +111,25 @@ impl MonteCarloAgent {
         let opp = player.get_opp();
 
         // recurse to the possible subsequent moves and score them
-        let mut total = 0.0;
+        let mut total = Outcomes::new(0, 0);
         for (r, c) in &valid_moves {
-            total += self.score_move(&new_board, opp, *r, *c);
+            total = total + self.score_move(&new_board, opp, *r, *c);
         }
 
         // score for this move = # of wins / # of possible end states that stem from this move
-        total / (valid_moves.len() as f64)
+        total
     }
 
     /// Agent chooses the best available move
     fn choose_move(&self, board: &Board) -> (usize, usize) {
         let valid_moves = self.get_valid_moves(board);
 
-        let mut max_score = 0.0;
+        let mut max_score = Outcomes::new(0, 1);
         let mut best_rc = valid_moves[0];
         for (r, c) in valid_moves {
             let score = self.score_move(board, Player::AI, r, c);
-            println!("{} {} {}", r, c, score);
-            if score > max_score {
+            println!("{} {} {:?}", r, c, score);
+            if score.as_f64() > max_score.as_f64() {
                 best_rc = (r, c);
                 max_score = score;
             }
