@@ -26,7 +26,7 @@ impl Outcomes {
         Outcomes { score, total }
     }
     fn as_f64(&self) -> f64 {
-        return self.score as f64 / self.total as f64;
+        self.score as f64 / self.total as f64
     }
 }
 
@@ -62,7 +62,7 @@ enum Player {
 
 impl Player {
     /// Get the opposite type (opponent) of this player
-    fn get_opponent(&self) -> Player {
+    fn get_opponent(self) -> Player {
         match self {
             Human => AI,
             AI => Human,
@@ -102,7 +102,7 @@ impl MonteCarloAgent {
                 valid_moves.push((i / board.size, i % board.size));
             }
         }
-        return valid_moves;
+        valid_moves
     }
 
     /// Scores a given move by playing it out recursively alternating between the AI and Human
@@ -216,6 +216,7 @@ impl Board {
                 _ => false,
             })
             .collect();
+
         empties.len() == 0
     }
 
