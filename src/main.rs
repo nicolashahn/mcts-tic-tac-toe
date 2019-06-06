@@ -16,19 +16,19 @@ const BAD_INPUT: &str = "bad input";
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 
-/// At a given game state, the summed wins/losses/draws and total playouts
+/// At a given game state, the summed wins/losses/draws
 #[derive(Debug, PartialEq)]
 struct Outcomes {
     score: isize,
-    total: usize,
+    //total: usize,
 }
 
 impl Outcomes {
-    fn new(score: isize, total: usize) -> Outcomes {
-        Outcomes { score, total }
+    fn new(score: isize /*, total: usize */) -> Outcomes {
+        Outcomes { score, /* total */ }
     }
     fn as_f64(&self) -> f64 {
-        self.score as f64 / self.total as f64
+        self.score as f64 // / self.total as f64
     }
 }
 
@@ -38,7 +38,7 @@ impl Add for Outcomes {
     fn add(self, other: Self) -> Self {
         Self {
             score: self.score + other.score,
-            total: self.total + other.total,
+            //total: self.total + other.total,
         }
     }
 }
@@ -88,6 +88,13 @@ struct Board {
     cells: Vec<Cell>,
 }
 
+fn factorial(i: usize) -> usize {
+    if i <= 1 {
+        return i;
+    }
+    factorial(i - 1) * i
+}
+
 // TODO eventually store interior node scores here so we don't need to check entire tree of
 // possible games at every turn
 struct MonteCarloAgent {}
@@ -114,13 +121,12 @@ impl MonteCarloAgent {
         if let Ok(Ended(endstate)) = board.enter_move(r, c, player) {
             // backtrack once we're done calculating
             board.undo_move(r, c);
-            // Wins get score of 1, losses -1, draws 0
-            // TODO weight outcomes more heavily if they're closer in the tree
-            // (less steps to get here from the original choose_move() step)
+
+            let score = factorial(board.num_moves_remaining()) + 1;
             return match endstate {
-                Winner(AI) => Outcomes::new(1, 1),
-                Winner(Human) => Outcomes::new(-1, 1),
-                Draw => Outcomes::new(0, 1),
+                Winner(AI) => Outcomes::new(score as isize),
+                Winner(Human) => Outcomes::new(-(score as isize)),
+                Draw => Outcomes::new(0),
             };
         }
 
@@ -130,7 +136,7 @@ impl MonteCarloAgent {
         let opp = player.get_opponent();
 
         // recurse to the possible subsequent moves and score them
-        let mut total = Outcomes::new(0, 0);
+        let mut total = Outcomes::new(0);
         for (new_r, new_c) in &valid_moves {
             total = total + self.score_move(board, opp, *new_r, *new_c);
         }
@@ -145,7 +151,7 @@ impl MonteCarloAgent {
     fn choose_move(&self, board: &Board) -> (usize, usize) {
         let valid_moves = self.get_valid_moves(board);
 
-        let mut max_score = Outcomes::new(-((2 as isize).pow(62)), 1);
+        let mut max_score = Outcomes::new(-((2 as isize).pow(62)));
         let mut best_rc = valid_moves[0];
         // need a mutable copy here so we can use recursive backtracking without needing to make
         // a copy of the board at each step
@@ -207,7 +213,7 @@ impl Board {
         self.cells[r * self.size + c] = Empty;
     }
 
-    fn no_moves_remaining(&self) -> bool {
+    fn num_moves_remaining(&self) -> usize {
         let empties: Vec<&Cell> = self
             .cells
             .iter()
@@ -216,8 +222,11 @@ impl Board {
                 _ => false,
             })
             .collect();
+        empties.len()
+    }
 
-        empties.len() == 0
+    fn no_moves_remaining(&self) -> bool {
+        self.num_moves_remaining() == 0
     }
 
     /// Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move
