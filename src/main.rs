@@ -7,6 +7,8 @@ use EndState::{Draw, Winner};
 use GameState::{Ended, Ongoing};
 use Player::{Human, AI};
 
+const STARTING_PLAYER: Player = Human;
+const BOARD_SIZE: usize = 3;
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
 // error messages
@@ -15,14 +17,14 @@ const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 
 /// At a given game state, the summed wins/losses/draws and total playouts
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq)]
 struct Outcomes {
     score: isize,
-    total: isize,
+    total: usize,
 }
 
 impl Outcomes {
-    fn new(score: isize, total: isize) -> Outcomes {
+    fn new(score: isize, total: usize) -> Outcomes {
         Outcomes { score, total }
     }
     fn as_f64(&self) -> f64 {
@@ -61,7 +63,7 @@ enum Player {
 }
 
 impl Player {
-    /// Get the opposite type (opponent) of this player
+    /// Get the opponent (opposite enum) of this player
     fn get_opponent(&self) -> Player {
         match self {
             Human => AI,
@@ -107,7 +109,6 @@ impl MonteCarloAgent {
 
     /// Scores a given move by playing it out recursively alternating between the AI and Human
     /// players taking turns until it reaches all end states
-    /// return (number of wins/number of overall end states)
     fn score_move(&self, board: &mut Board, player: Player, r: usize, c: usize) -> Outcomes {
         // create a new board with the move in question played
         if let Ok(Ended(endstate)) = board.enter_move(r, c, player) {
@@ -137,7 +138,6 @@ impl MonteCarloAgent {
         // backtrack once we're done calculating
         board.undo_move(r, c);
 
-        // score for this move = # of wins / # of possible end states that stem from this move
         total
     }
 
@@ -315,14 +315,13 @@ fn get_move() -> Result<(usize, usize), &'static str> {
 }
 
 fn main() -> io::Result<()> {
-    let mut board = Board::new(3);
-
-    println!("IT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
-    board.display();
-
+    let mut board = Board::new(BOARD_SIZE);
+    let mut player = STARTING_PLAYER;
     let ai = MonteCarloAgent::new();
 
-    let mut player = Human;
+    println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
+    board.display();
+
     loop {
         let rc: (usize, usize);
         match player {
@@ -348,16 +347,18 @@ fn main() -> io::Result<()> {
             Ok(Ended(endstate)) => {
                 board.display();
                 match endstate {
-                    Winner(Human) => println!("Game over, you are the winner!"),
+                    Winner(Human) => println!("Game over, you won!"),
                     Winner(AI) => println!("Game over, you lost!"),
                     Draw => println!("Game over, it's a draw!"),
                 }
                 return Ok(());
             }
             Ok(Ongoing) => board.display(),
-            // back to start of loop to let user enter a different move
             Err(msg) => {
+                // if the AI entered an illegal move, something is broken
+                assert!(player == Human);
                 println!("Oops, illegal move: {}", msg);
+                // back to start of loop to let user enter a different move
                 continue;
             }
         };
