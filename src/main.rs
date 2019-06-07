@@ -188,7 +188,6 @@ impl MonteCarloAgent {
     }
 
     /// Agent chooses the best available move
-    /// TODO: parallelize using threads
     fn choose_move(&self, board: &Board) -> (usize, usize) {
         let valid_moves = self.get_valid_moves(board);
         let num_moves = valid_moves.len();
