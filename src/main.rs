@@ -5,6 +5,8 @@ extern crate cached;
 
 use std::io;
 use std::ops::Add;
+use std::sync::mpsc;
+use std::thread;
 
 use rand::{thread_rng, Rng};
 
@@ -15,10 +17,10 @@ use Player::{Human, AI};
 
 // TODO add command line flags to control these
 const STARTING_PLAYER: Player = Human;
-const BOARD_SIZE: usize = 3;
+const BOARD_SIZE: usize = 5;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
-const PLAYOUTS_THRESHOLD: usize = 100_000;
+const PLAYOUTS_THRESHOLD: usize = 1_000_000;
 
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
@@ -108,6 +110,7 @@ cached! {
 
 // TODO eventually store interior node scores here so we don't need to check entire tree of
 // possible games at every turn
+#[derive(Clone, Debug)]
 struct MonteCarloAgent {}
 
 impl MonteCarloAgent {
@@ -192,18 +195,32 @@ impl MonteCarloAgent {
         let mut max_score = -((2 as isize).pow(62));
         let mut total_playouts = 0;
         let mut best_rc = valid_moves[0];
-        // need a mutable copy here so we can use recursive backtracking without needing to make
-        // a copy of the board at each step
-        let mut theoretical_board = board.clone();
+
+        let (tx, rx) = mpsc::channel();
 
         for (r, c) in valid_moves {
-            let outcomes = self.score_move(
-                &mut theoretical_board,
-                AI,
-                r,
-                c,
-                PLAYOUTS_THRESHOLD / num_moves,
-            );
+            let new_tx = tx.clone();
+            let theoretical_self = self.clone();
+            // need a mutable copy here so we can use recursive backtracking without needing to make
+            // a copy of the board at each step
+            let mut theoretical_board = board.clone();
+            thread::spawn(move || {
+                let outcomes = theoretical_self.score_move(
+                    &mut theoretical_board,
+                    AI,
+                    r,
+                    c,
+                    PLAYOUTS_THRESHOLD / num_moves,
+                );
+                new_tx.send((outcomes, r, c)).unwrap();
+                //new_tx.send((Outcomes::new(0, 0), r, c)).unwrap();
+            });
+        }
+
+        let mut rec_ctr = 0;
+        for received in rx {
+            rec_ctr += 1;
+            let (outcomes, r, c) = received;
 
             println!("Evaluating move (r: {}, c: {}), {:?}", r, c, outcomes);
 
@@ -213,6 +230,10 @@ impl MonteCarloAgent {
             }
 
             total_playouts += outcomes.total;
+
+            if rec_ctr == num_moves {
+                break;
+            }
         }
 
         println!(
