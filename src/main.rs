@@ -1,14 +1,23 @@
 /// Monte Carlo tree search Tic-Tac-Toe agent and command line interface for playing against it.
+extern crate rand;
+
 use std::io;
 use std::ops::Add;
+
+use rand::{thread_rng, Rng};
 
 use Cell::{Empty, Full};
 use EndState::{Draw, Winner};
 use GameState::{Ended, Ongoing};
 use Player::{Human, AI};
 
+// TODO add command line flags to control these
 const STARTING_PLAYER: Player = Human;
 const BOARD_SIZE: usize = 3;
+// number of random games to play out from a given game state
+// stop after we reach or exceed this number
+const PLAYOUTS_THRESHOLD: usize = 100_000;
+
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
 // error messages
@@ -20,15 +29,12 @@ const CELL_TAKEN: &str = "cell taken";
 #[derive(Debug, PartialEq)]
 struct Outcomes {
     score: isize,
-    //total: usize,
+    total: usize,
 }
 
 impl Outcomes {
-    fn new(score: isize /*, total: usize */) -> Outcomes {
-        Outcomes { score, /* total */ }
-    }
-    fn as_f64(&self) -> f64 {
-        self.score as f64 // / self.total as f64
+    fn new(score: isize, total: usize) -> Outcomes {
+        Outcomes { score, total }
     }
 }
 
@@ -38,7 +44,7 @@ impl Add for Outcomes {
     fn add(self, other: Self) -> Self {
         Self {
             score: self.score + other.score,
-            //total: self.total + other.total,
+            total: self.total + other.total,
         }
     }
 }
@@ -114,56 +120,95 @@ impl MonteCarloAgent {
         valid_moves
     }
 
-    /// Scores a given move by playing it out recursively alternating between the AI and Human
-    /// players taking turns until it reaches all end states
-    fn score_move(&self, board: &mut Board, player: Player, r: usize, c: usize) -> Outcomes {
-        // create a new board with the move in question played
+    /// Scores a given move by playing it out recursively on a theoretical board alternating
+    /// between the AI and Human players taking turns until it reaches an end state
+    fn score_move(
+        &self,
+        board: &mut Board,
+        player: Player,
+        r: usize,
+        c: usize,
+        playout_threshold: usize,
+    ) -> Outcomes {
+        // play the move in question on the theoretical board
         if let Ok(Ended(endstate)) = board.enter_move(r, c, player) {
             // backtrack once we're done calculating
             board.undo_move(r, c);
 
-            let score = factorial(board.num_moves_remaining()) + 1;
+            // score is factorial of the number of empty cells remaining because that's how many
+            // different end states there could be if we were able to keep playing moves after
+            // someone wins the game, up until the board is full - this is a way of weighting
+            // more immediate (less moves to get to) wins/losses more heavily than farther out ones
+            let score = factorial(board.num_cells_remaining()) + 1;
+
+            // return score if win, -score if lose, 0 if draw
             return match endstate {
-                Winner(AI) => Outcomes::new(score as isize),
-                Winner(Human) => Outcomes::new(-(score as isize)),
-                Draw => Outcomes::new(0),
+                Winner(AI) => Outcomes::new(score as isize, 1),
+                Winner(Human) => Outcomes::new(-(score as isize), 1),
+                Draw => Outcomes::new(0, 1),
             };
         }
 
         // if this is an intermediate node:
         // get next possible moves for the opposing player
-        let valid_moves = self.get_valid_moves(board);
+        let mut valid_moves = self.get_valid_moves(board);
+        thread_rng().shuffle(&mut valid_moves);
         let opp = player.get_opponent();
 
         // recurse to the possible subsequent moves and score them
-        let mut total = Outcomes::new(0);
+        let mut outcomes = Outcomes::new(0, 0);
         for (new_r, new_c) in &valid_moves {
-            total = total + self.score_move(board, opp, *new_r, *new_c);
+            outcomes = outcomes + self.score_move(board, opp, *new_r, *new_c, playout_threshold);
+
+            if outcomes.total >= playout_threshold {
+                // we've met or surpassed the total # of games we're supposed to play out
+                break;
+            }
         }
 
         // backtrack once we're done calculating
         board.undo_move(r, c);
 
-        total
+        outcomes
     }
 
     /// Agent chooses the best available move
+    /// TODO: parallelize using threads
     fn choose_move(&self, board: &Board) -> (usize, usize) {
+        // get valid moves in random order
         let valid_moves = self.get_valid_moves(board);
+        let num_moves = valid_moves.len();
 
-        let mut max_score = Outcomes::new(-((2 as isize).pow(62)));
+        let mut max_score = -((2 as isize).pow(62));
+        let mut total_playouts = 0;
         let mut best_rc = valid_moves[0];
         // need a mutable copy here so we can use recursive backtracking without needing to make
         // a copy of the board at each step
         let mut theoretical_board = board.clone();
+
         for (r, c) in valid_moves {
-            let score = self.score_move(&mut theoretical_board, AI, r, c);
-            println!("{} {} {:?}", r, c, score);
-            if score.as_f64() > max_score.as_f64() {
+            let outcomes = self.score_move(
+                &mut theoretical_board,
+                AI,
+                r,
+                c,
+                PLAYOUTS_THRESHOLD / num_moves,
+            );
+
+            println!("Evaluating move (r: {}, c: {}), {:?}", r, c, outcomes);
+
+            if outcomes.score > max_score {
                 best_rc = (r, c);
-                max_score = score;
+                max_score = outcomes.score;
             }
+
+            total_playouts += outcomes.total;
         }
+
+        println!(
+            "Chosen move: {:?}, total playouts: {}",
+            best_rc, total_playouts
+        );
 
         best_rc
     }
@@ -213,7 +258,7 @@ impl Board {
         self.cells[r * self.size + c] = Empty;
     }
 
-    fn num_moves_remaining(&self) -> usize {
+    fn num_cells_remaining(&self) -> usize {
         let empties: Vec<&Cell> = self
             .cells
             .iter()
@@ -226,7 +271,7 @@ impl Board {
     }
 
     fn no_moves_remaining(&self) -> bool {
-        self.num_moves_remaining() == 0
+        self.num_cells_remaining() == 0
     }
 
     /// Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move

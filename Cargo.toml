@@ -5,3 +5,4 @@ authors = ["Nicolas Hahn <nicolas@stonespring.org>"]
 edition = "2018"
 
 [dependencies]
+rand = "*"
