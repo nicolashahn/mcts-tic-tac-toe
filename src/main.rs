@@ -94,6 +94,7 @@ struct Board {
     cells: Vec<Cell>,
 }
 
+// TODO memoize
 fn factorial(i: usize) -> usize {
     if i <= 1 {
         return i;
@@ -141,9 +142,14 @@ impl MonteCarloAgent {
             // more immediate (less moves to get to) wins/losses more heavily than farther out ones
             let score = factorial(board.num_cells_remaining()) + 1;
 
-            // return score if win, -score if lose, 0 if draw
+            // return score/2 if win, -score if lose, 0 if draw
+            // a win is only worth half as much as a loss because:
+            //
+            //      "To win, first you must not lose."
+            //      - Nicolas Hahn
+            //
             return match endstate {
-                Winner(AI) => Outcomes::new(score as isize, 1),
+                Winner(AI) => Outcomes::new((score / 2) as isize, 1),
                 Winner(Human) => Outcomes::new(-(score as isize), 1),
                 Draw => Outcomes::new(0, 1),
             };
