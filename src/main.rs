@@ -29,7 +29,8 @@ const BAD_INPUT: &str = "bad input";
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 
-/// At a given game state, the summed wins/losses/draws
+/// At a given game state, the summed wins/losses/draw scores, as well as the total number of
+/// playouts that have been tried
 #[derive(Debug, PartialEq)]
 struct Outcomes {
     score: isize,
@@ -63,7 +64,7 @@ enum GameState {
     Ongoing,
 }
 
-/// The type of player
+/// The type of player, mainly used for deciding whose turn it is
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Player {
     // You
@@ -108,9 +109,10 @@ cached! {
     }
 }
 
-// TODO eventually store interior node scores here so we don't need to check entire tree of
-// possible games at every turn
 #[derive(Clone, Debug)]
+/// Agent that plays uses Monte Carlo tree search to choose moves.
+/// TODO eventually store interior node scores here so we don't need to check entire tree of
+/// possible games at every turn
 struct MonteCarloAgent {}
 
 impl MonteCarloAgent {
@@ -188,7 +190,6 @@ impl MonteCarloAgent {
     /// Agent chooses the best available move
     /// TODO: parallelize using threads
     fn choose_move(&self, board: &Board) -> (usize, usize) {
-        // get valid moves in random order
         let valid_moves = self.get_valid_moves(board);
         let num_moves = valid_moves.len();
 
@@ -245,6 +246,7 @@ impl MonteCarloAgent {
     }
 }
 
+/// Representation of an N-dimensional tic-tac-toe board
 impl Board {
     /// Return a new Board of (size * size) cells
     fn new(size: usize) -> Board {
@@ -372,6 +374,10 @@ impl Board {
         false
     }
 }
+
+/// ------------------
+/// - Game interface -
+/// ------------------
 
 /// Accept player input from stdin, parse into (row, col) indexes
 /// Columns are letter indexes, rows are integers
