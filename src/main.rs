@@ -213,7 +213,6 @@ impl MonteCarloAgent {
                     PLAYOUTS_THRESHOLD / num_moves,
                 );
                 new_tx.send((outcomes, r, c)).unwrap();
-                //new_tx.send((Outcomes::new(0, 0), r, c)).unwrap();
             });
         }
 
