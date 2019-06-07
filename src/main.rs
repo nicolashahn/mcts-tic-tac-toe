@@ -1,5 +1,7 @@
 /// Monte Carlo tree search Tic-Tac-Toe agent and command line interface for playing against it.
 extern crate rand;
+#[macro_use]
+extern crate cached;
 
 use std::io;
 use std::ops::Add;
@@ -94,12 +96,14 @@ struct Board {
     cells: Vec<Cell>,
 }
 
-// TODO memoize
-fn factorial(i: usize) -> usize {
-    if i <= 1 {
-        return i;
+cached! {
+    FACTORIAL;
+    fn factorial(i: usize) -> usize = {
+        if i <= 1 {
+            return i;
+        }
+        factorial(i - 1) * i
     }
-    factorial(i - 1) * i
 }
 
 // TODO eventually store interior node scores here so we don't need to check entire tree of
