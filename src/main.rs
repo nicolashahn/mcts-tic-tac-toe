@@ -13,24 +13,35 @@ use rand::{thread_rng, Rng};
 use Cell::{Empty, Full};
 use EndState::{Draw, Winner};
 use GameState::{Ended, Ongoing};
-use Player::{Human, AI};
+use Player::{P1, P2};
 
-// TODO add command line flags to control these
-const STARTING_PLAYER: Player = Human;
+// TODO add command line flags to control these + agent types
 const BOARD_SIZE: usize = 4;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
-const PLAYOUTS_THRESHOLD: usize = 1_000_000;
+// on my Ryzen 2600 w/threading, it takes about 5 seconds to generate this many playouts
+const PLAYOUT_BUDGET: usize = 1_000_000;
 
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
-// error messages
+// Error messages
 const BAD_INPUT: &str = "bad input";
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 
+cached! {
+    FACTORIAL;
+    fn factorial(i: usize) -> usize = {
+        if i <= 1 {
+            return i;
+        }
+
+        factorial(i - 1) * i
+    }
+}
+
 /// At a given game state, the summed wins/losses/draw scores, as well as the total number of
-/// playouts that have been tried
+/// playouts that have been tried.
 #[derive(Debug, PartialEq)]
 struct Outcomes {
     score: isize,
@@ -54,142 +65,119 @@ impl Add for Outcomes {
     }
 }
 
+/// Did the game end in a draw or was there a winner?
 enum EndState {
     Winner(Player),
     Draw,
 }
 
+/// Has the game ended or is it ongoing?
 enum GameState {
     Ended(EndState),
     Ongoing,
 }
 
-/// The type of player, mainly used for deciding whose turn it is
+/// Used for deciding whose turn it is
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Player {
-    // You
-    Human,
-    // MonteCarloAgent (or other AI agent)
-    AI,
+    P1,
+    P2,
 }
 
 impl Player {
-    /// Get the opponent (opposite enum) of this player
-    fn get_opponent(self) -> Player {
+    fn get_opponent(&self) -> Player {
         match self {
-            Human => AI,
-            AI => Human,
+            P1 => P2,
+            P2 => P1,
         }
     }
 }
 
-/// Represents a single cell of the tic-tac-toe board
+/// Represents a single cell of the tic-tac-toe board.
 #[derive(Clone, Copy, Debug)]
 enum Cell {
     Empty,
     Full(Player),
 }
 
-/// Store the size and state of the tic-tac-toe board
+/// Store the size and state of the tic-tac-toe board.
 #[derive(Clone, Debug)]
 struct Board {
     // dimension of the board (total number of cells = size * size)
     size: usize,
     // for example: 3x3 grid would be a vec of length 9
     cells: Vec<Cell>,
+    // who gets to make the next move?
+    is_p1_turn: bool,
 }
 
-cached! {
-    FACTORIAL;
-    fn factorial(i: usize) -> usize = {
-        if i <= 1 {
-            return i;
-        }
+/// An agent that can choose a move from a tic-tac-toe board.
+trait TicTacToeAgent {
+    fn choose_move(&self, board: &Board) -> (usize, usize);
+}
 
-        factorial(i - 1) * i
+/// An agent controlled by the user running the program.
+struct HumanAgent {}
+
+impl TicTacToeAgent for HumanAgent {
+    fn choose_move(&self, _board: &Board) -> (usize, usize) {
+        loop {
+            println!("Enter a move (like \"a0\"):");
+            match self.get_move() {
+                Ok(rc) => return rc,
+                Err(_) => {
+                    println!("Oops, enter valid input");
+                }
+            };
+        }
+    }
+}
+
+impl HumanAgent {
+    fn new() -> HumanAgent {
+        HumanAgent {}
+    }
+
+    /// Accept player input from stdin, parse into (row, col) indexes.
+    /// Columns are letter indexes, rows are integers.
+    /// Example: "a2" means column 0, row 2
+    fn get_move(&self) -> Result<(usize, usize), &'static str> {
+        let mut input = String::new();
+        if let Err(_) = io::stdin().read_line(&mut input) {
+            return Err(BAD_INPUT);
+        }
+        // at least 2 indices + \n
+        if input.len() < 3 {
+            return Err(BAD_INPUT);
+        }
+        let player_move = input.trim();
+
+        let col = match ALPHABET.find(player_move.chars().nth(0).unwrap()) {
+            Some(idx) => idx,
+            None => return Err(BAD_INPUT),
+        };
+
+        let row = match player_move.chars().nth(1).unwrap().to_digit(10) {
+            Some(idx) => idx as usize,
+            None => return Err(BAD_INPUT),
+        };
+
+        Ok((row, col))
     }
 }
 
 #[derive(Clone, Debug)]
-/// Agent that plays uses Monte Carlo tree search to choose moves.
+/// AI agent that plays using Monte Carlo tree search to choose moves.
 /// TODO eventually store interior node scores here so we don't need to check entire tree of
 /// possible games at every turn
-struct MonteCarloAgent {}
+struct MonteCarloAgent {
+    player: Player,
+}
 
-impl MonteCarloAgent {
-    fn new() -> MonteCarloAgent {
-        MonteCarloAgent {}
-    }
-
-    fn get_valid_moves(&self, board: &Board) -> Vec<(usize, usize)> {
-        let mut valid_moves = Vec::new();
-        for (i, cell) in board.cells.iter().enumerate() {
-            if let Empty = cell {
-                valid_moves.push((i / board.size, i % board.size));
-            }
-        }
-        valid_moves
-    }
-
-    /// Scores a given move by playing it out recursively on a theoretical board alternating
-    /// between the AI and Human players taking turns until it reaches an end state
-    fn score_move(
-        &self,
-        board: &mut Board,
-        player: Player,
-        row: usize,
-        col: usize,
-        playout_threshold: usize,
-    ) -> Outcomes {
-        // play the move in question on the theoretical board
-        if let Ok(Ended(endstate)) = board.enter_move(row, col, player) {
-            // backtrack once we're done calculating
-            board.undo_move(row, col);
-
-            // score is factorial of the number of empty cells remaining because that's how many
-            // different end states there could be if we were able to keep playing moves after
-            // someone wins the game, up until the board is full - this is a way of weighting
-            // more immediate (less moves to get to) wins/losses more heavily than farther out ones
-            let score = factorial(board.num_cells_remaining()) + 1;
-
-            // return score/2 if win, -score if lose, 0 if draw
-            // a win is only worth half as much as a loss because:
-            //
-            //      "To win, first you must not lose."
-            //      - Nicolas Hahn
-            //
-            return match endstate {
-                Winner(AI) => Outcomes::new((score / 2) as isize, 1),
-                Winner(Human) => Outcomes::new(-(score as isize), 1),
-                Draw => Outcomes::new(0, 1),
-            };
-        }
-
-        // if this is an intermediate node:
-        // get next possible moves for the opposing player
-        let mut valid_moves = self.get_valid_moves(board);
-        thread_rng().shuffle(&mut valid_moves);
-        let opp = player.get_opponent();
-
-        // recurse to the possible subsequent moves and score them
-        let mut outcomes = Outcomes::new(0, 0);
-        for (new_r, new_c) in &valid_moves {
-            outcomes = outcomes + self.score_move(board, opp, *new_r, *new_c, playout_threshold);
-
-            if outcomes.total >= playout_threshold {
-                // we've met or surpassed the total # of games we're supposed to play out
-                break;
-            }
-        }
-
-        // backtrack once we're done calculating
-        board.undo_move(row, col);
-
-        outcomes
-    }
-
+impl TicTacToeAgent for MonteCarloAgent {
     /// Agent chooses the best available move
     fn choose_move(&self, board: &Board) -> (usize, usize) {
+        println!("{:?} AI is thinking...", self.player);
         let valid_moves = self.get_valid_moves(board);
         let num_moves = valid_moves.len();
 
@@ -200,22 +188,23 @@ impl MonteCarloAgent {
         let (sender, receiver) = mpsc::channel();
 
         for (row, col) in valid_moves {
-            let sender = sender.clone();
-            let theoretical_self = self.clone();
             // need a mutable copy here so we can use recursive backtracking without needing to make
             // a copy of the board at each step
             let mut theoretical_board = board.clone();
+            let theoretical_self = self.clone();
+            let theoretical_player = self.player.clone();
+            let new_sender = sender.clone();
             thread::spawn(move || {
                 let outcomes = theoretical_self.score_move(
                     &mut theoretical_board,
-                    AI,
+                    theoretical_player,
                     row,
                     col,
-                    // our "playouts budget" is the total threshold split evenly between the
-                    // immediate possible moves
-                    PLAYOUTS_THRESHOLD / num_moves,
+                    // our "playout budget" for a single move is the total budget split evenly
+                    // between all the current possible moves
+                    PLAYOUT_BUDGET / num_moves,
                 );
-                sender.send((outcomes, row, col)).unwrap();
+                new_sender.send((outcomes, row, col)).unwrap();
             });
         }
 
@@ -246,13 +235,88 @@ impl MonteCarloAgent {
     }
 }
 
+impl MonteCarloAgent {
+    fn new(player: Player) -> MonteCarloAgent {
+        MonteCarloAgent { player }
+    }
+
+    fn get_valid_moves(&self, board: &Board) -> Vec<(usize, usize)> {
+        let mut valid_moves = Vec::new();
+        for (i, cell) in board.cells.iter().enumerate() {
+            if let Empty = cell {
+                valid_moves.push((i / board.size, i % board.size));
+            }
+        }
+        valid_moves
+    }
+
+    /// Scores a given move by playing it out on a theoretical board alternating between the agent and
+    /// the opponent player taking turns until it reaches an end state as many times as it can
+    /// before it reaches its playout_threshold.
+    fn score_move(
+        &self,
+        board: &mut Board,
+        player: Player,
+        row: usize,
+        col: usize,
+        playout_budget: usize,
+    ) -> Outcomes {
+        // play the move in question on the theoretical board
+        if let Ok(Ended(endstate)) = board.enter_move(row, col, player) {
+            // backtrack once we're done calculating
+            board.undo_move(row, col);
+
+            // score is factorial of the number of empty cells remaining because that's how many
+            // different end states there could be if we were able to keep playing moves after
+            // someone wins the game, up until the board is full - this is a way of weighting
+            // more immediate (less moves to get to) wins/losses more heavily than farther out ones
+            let score = factorial(board.num_cells_remaining()) + 1;
+
+            // return score/2 if win, -score if lose, 0 if draw
+            // a win is only worth half as much as a loss because:
+            //
+            //      "To win, first you must not lose."
+            //      - Nicolas Hahn
+            //
+            return match (endstate, self.player) {
+                (Winner(P1), P1) | (Winner(P2), P2) => Outcomes::new((score / 2) as isize, 1),
+                (Draw, _) => Outcomes::new(0, 1),
+                _ => Outcomes::new(-(score as isize), 1),
+            };
+        }
+
+        // if this is an intermediate node:
+        // get next possible moves for the opposing player
+        let mut valid_moves = self.get_valid_moves(board);
+        thread_rng().shuffle(&mut valid_moves);
+        let opp = player.get_opponent();
+
+        // recurse to the possible subsequent moves and score them
+        let mut outcomes = Outcomes::new(0, 0);
+        for (new_r, new_c) in &valid_moves {
+            outcomes = outcomes + self.score_move(board, opp, *new_r, *new_c, playout_budget);
+
+            if outcomes.total >= playout_budget {
+                // we've met or surpassed the total # of games we're supposed to play out
+                break;
+            }
+        }
+
+        // backtrack once we're done calculating
+        board.undo_move(row, col);
+
+        outcomes
+    }
+}
+
 /// Representation of an N-dimensional tic-tac-toe board
 impl Board {
-    /// Return a new Board of (size * size) cells
+    /// Return a new Board of (size * size) cells.
     fn new(size: usize) -> Board {
         Board {
             cells: vec![Empty; (size * size) as usize],
             size,
+            is_p1_turn: true,
         }
     }
 
@@ -277,8 +341,8 @@ impl Board {
                 row.push(match &self.cells[i * self.size + j] {
                     Empty => '.',
                     Full(player) => match player {
-                        Human => 'o',
-                        AI => 'x',
+                        P1 => 'o',
+                        P2 => 'x',
                     },
                 });
             }
@@ -308,7 +372,7 @@ impl Board {
         self.num_cells_remaining() == 0
     }
 
-    /// Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move
+    /// Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move.
     fn enter_move(&mut self, row: usize, col: usize, player: Player) -> Result<GameState, &str> {
         let idx = row * self.size + col;
         if idx > self.size * self.size - 1 {
@@ -327,10 +391,12 @@ impl Board {
             return Ok(Ended(Draw));
         }
 
+        self.is_p1_turn = !self.is_p1_turn;
+
         Ok(Ongoing)
     }
 
-    /// Return if the line defined by the filter_fn is filled with cells of type player
+    /// Return if the line defined by the filter_fn is filled with cells of type player.
     fn line_is_filled_with_player(&self, player: Player, filter_fn: &Fn(usize) -> bool) -> bool {
         let matching_cells: Vec<(usize, &Cell)> = self
             .cells
@@ -376,85 +442,44 @@ impl Board {
     }
 }
 
-/// ------------------
-/// - Game interface -
-/// ------------------
-
-/// Accept player input from stdin, parse into (row, col) indexes
-/// Columns are letter indexes, rows are integers
-/// Example: "a2" means column 0, row 2
-fn get_move() -> Result<(usize, usize), &'static str> {
-    let mut input = String::new();
-    if let Err(_) = io::stdin().read_line(&mut input) {
-        return Err(BAD_INPUT);
-    }
-    // at least 2 indices + \n
-    if input.len() < 3 {
-        return Err(BAD_INPUT);
-    }
-    let player_move = input.trim();
-
-    let col = match ALPHABET.find(player_move.chars().nth(0).unwrap()) {
-        Some(idx) => idx,
-        None => return Err(BAD_INPUT),
-    };
-
-    let row = match player_move.chars().nth(1).unwrap().to_digit(10) {
-        Some(idx) => idx as usize,
-        None => return Err(BAD_INPUT),
-    };
-
-    Ok((row, col))
-}
+/// -------------
+/// - Game loop -
+/// -------------
 
 fn main() -> io::Result<()> {
     let mut board = Board::new(BOARD_SIZE);
-    let mut player = STARTING_PLAYER;
-    let ai = MonteCarloAgent::new();
+    //let agent1 = MonteCarloAgent::new(P1);
+    let agent1 = HumanAgent::new();
+    let agent2 = MonteCarloAgent::new(P2);
 
     println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
     board.display();
 
     loop {
-        let rc: (usize, usize);
-        match player {
-            Human => {
-                println!("Enter a move (like \"a0\"):");
-
-                rc = match get_move() {
-                    Ok(rc) => rc,
-                    Err(_) => {
-                        println!("Oops, enter valid input");
-                        continue;
-                    }
-                };
-            }
-            AI => {
-                println!("AI is thinking...");
-                rc = ai.choose_move(&board);
-            }
-        }
+        let player = match board.is_p1_turn {
+            true => P1,
+            false => P2,
+        };
+        let rc = match player {
+            P1 => agent1.choose_move(&board),
+            P2 => agent2.choose_move(&board),
+        };
 
         let (row, col) = rc;
         match board.enter_move(row, col, player) {
             Ok(Ended(endstate)) => {
                 board.display();
                 match endstate {
-                    Winner(Human) => println!("Game over, you won!"),
-                    Winner(AI) => println!("Game over, you lost!"),
+                    Winner(P1) => println!("Game over, P1 won!"),
+                    Winner(P2) => println!("Game over, P2 won!"),
                     Draw => println!("Game over, it's a draw!"),
                 }
                 return Ok(());
             }
             Ok(Ongoing) => board.display(),
             Err(msg) => {
-                // if the AI entered an illegal move, something is broken
-                assert!(player == Human);
                 println!("Oops, illegal move: {}", msg);
-                // back to start of loop to let user enter a different move
-                continue;
             }
         };
-        player = player.get_opponent();
     }
 }
