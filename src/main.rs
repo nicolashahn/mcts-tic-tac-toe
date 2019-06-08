@@ -17,7 +17,7 @@ use Player::{Human, AI};
 
 // TODO add command line flags to control these
 const STARTING_PLAYER: Player = Human;
-const BOARD_SIZE: usize = 5;
+const BOARD_SIZE: usize = 4;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
 const PLAYOUTS_THRESHOLD: usize = 1_000_000;
@@ -105,6 +105,7 @@ cached! {
         if i <= 1 {
             return i;
         }
+
         factorial(i - 1) * i
     }
 }
@@ -136,14 +137,14 @@ impl MonteCarloAgent {
         &self,
         board: &mut Board,
         player: Player,
-        r: usize,
-        c: usize,
+        row: usize,
+        col: usize,
         playout_threshold: usize,
     ) -> Outcomes {
         // play the move in question on the theoretical board
-        if let Ok(Ended(endstate)) = board.enter_move(r, c, player) {
+        if let Ok(Ended(endstate)) = board.enter_move(row, col, player) {
             // backtrack once we're done calculating
-            board.undo_move(r, c);
+            board.undo_move(row, col);
 
             // score is factorial of the number of empty cells remaining because that's how many
             // different end states there could be if we were able to keep playing moves after
@@ -182,7 +183,7 @@ impl MonteCarloAgent {
         }
 
         // backtrack once we're done calculating
-        board.undo_move(r, c);
+        board.undo_move(row, col);
 
         outcomes
     }
@@ -194,12 +195,12 @@ impl MonteCarloAgent {
 
         let mut max_score = -((2 as isize).pow(62));
         let mut total_playouts = 0;
-        let mut best_rc = valid_moves[0];
+        let mut best_rowcol = valid_moves[0];
 
-        let (tx, rx) = mpsc::channel();
+        let (sender, receiver) = mpsc::channel();
 
-        for (r, c) in valid_moves {
-            let new_tx = tx.clone();
+        for (row, col) in valid_moves {
+            let sender = sender.clone();
             let theoretical_self = self.clone();
             // need a mutable copy here so we can use recursive backtracking without needing to make
             // a copy of the board at each step
@@ -208,39 +209,40 @@ impl MonteCarloAgent {
                 let outcomes = theoretical_self.score_move(
                     &mut theoretical_board,
                     AI,
-                    r,
-                    c,
+                    row,
+                    col,
+                    // our "playouts budget" is the total threshold split evenly between the
+                    // immediate possible moves
                     PLAYOUTS_THRESHOLD / num_moves,
                 );
-                new_tx.send((outcomes, r, c)).unwrap();
+                sender.send((outcomes, row, col)).unwrap();
             });
         }
 
-        let mut rec_ctr = 0;
-        for received in rx {
-            rec_ctr += 1;
-            let (outcomes, r, c) = received;
+        let mut threads_finished = 0;
+        for (outcomes, row, col) in receiver {
+            threads_finished += 1;
 
-            println!("Evaluating move (r: {}, c: {}), {:?}", r, c, outcomes);
+            println!("Evaluating move (row {}, col {}), {:?}", row, col, outcomes);
 
             if outcomes.score > max_score {
-                best_rc = (r, c);
+                best_rowcol = (row, col);
                 max_score = outcomes.score;
             }
 
             total_playouts += outcomes.total;
 
-            if rec_ctr == num_moves {
+            if threads_finished == num_moves {
                 break;
             }
         }
 
         println!(
             "Chosen move: {:?}, total playouts: {}",
-            best_rc, total_playouts
+            best_rowcol, total_playouts
         );
 
-        best_rc
+        best_rowcol
     }
 }
 
@@ -298,6 +300,7 @@ impl Board {
                 _ => false,
             })
             .collect();
+
         empties.len()
     }
 
