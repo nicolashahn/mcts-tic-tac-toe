@@ -1,4 +1,4 @@
-/// Monte Carlo tree search Tic-Tac-Toe agent and command line interface for playing against it.
+/// Command line interface for playing tic-tac-toe against an AI.
 use std::io;
 
 use mcts_tic_tac_toe::EndState::{Draw, Winner};

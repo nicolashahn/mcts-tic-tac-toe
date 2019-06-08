@@ -1,4 +1,4 @@
-/// Monte Carlo tree search Tic-Tac-Toe agent and command line interface for playing against it.
+/// Tic-tac-toe implementation and a Monte Carlo tree search agent.
 extern crate rand;
 #[macro_use]
 extern crate cached;
