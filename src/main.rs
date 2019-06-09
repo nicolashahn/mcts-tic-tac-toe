@@ -4,13 +4,10 @@ use std::io;
 use mcts_tic_tac_toe::EndState::{Draw, Winner};
 use mcts_tic_tac_toe::GameState::{Ended, Ongoing};
 use mcts_tic_tac_toe::Player::{P1, P2};
-use mcts_tic_tac_toe::{Board, HumanAgent, MonteCarloAgent, TicTacToeAgent};
-
-// TODO add command line flags to control board size, player agent types, playout budget
-pub const BOARD_SIZE: usize = 4;
+use mcts_tic_tac_toe::{HumanAgent, MonteCarloAgent, TicTacToeAgent, TicTacToeBoard, BOARD_SIZE};
 
 fn main() -> io::Result<()> {
-    let mut board = Board::new(BOARD_SIZE);
+    let mut board = TicTacToeBoard::new(BOARD_SIZE);
     //let agent1 = MonteCarloAgent::new(P1);
     let agent1 = HumanAgent::new();
     let agent2 = MonteCarloAgent::new(P2);

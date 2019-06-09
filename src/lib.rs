@@ -7,6 +7,7 @@ use std::io;
 use std::ops::Add;
 use std::sync::mpsc;
 use std::thread;
+use std::time::Instant;
 
 use rand::{thread_rng, Rng};
 
@@ -15,6 +16,8 @@ use EndState::{Draw, Winner};
 use GameState::{Ended, Ongoing};
 use Player::{P1, P2};
 
+// TODO add command line flags to control board size, player agent types, playout budget
+pub const BOARD_SIZE: usize = 5;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
 // on my Ryzen 2600 w/threading, it takes about 5 seconds to generate this many playouts
@@ -93,14 +96,14 @@ impl Player {
 
 /// An agent that can choose a move from a tic-tac-toe board.
 pub trait TicTacToeAgent {
-    fn choose_move(&self, board: &Board) -> (usize, usize);
+    fn choose_move(&self, board: &TicTacToeBoard) -> (usize, usize);
 }
 
 /// An agent controlled by the user running the program.
 pub struct HumanAgent {}
 
 impl TicTacToeAgent for HumanAgent {
-    fn choose_move(&self, _board: &Board) -> (usize, usize) {
+    fn choose_move(&self, _board: &TicTacToeBoard) -> (usize, usize) {
         loop {
             println!("Enter a move (like \"a0\"):");
             match self.get_move() {
@@ -156,7 +159,7 @@ pub struct MonteCarloAgent {
 
 impl TicTacToeAgent for MonteCarloAgent {
     /// Agent chooses the best available move
-    fn choose_move(&self, board: &Board) -> (usize, usize) {
+    fn choose_move(&self, board: &TicTacToeBoard) -> (usize, usize) {
         println!("{:?} AI is thinking...", self.player);
         let valid_moves = self.get_valid_moves(board);
         let num_moves = valid_moves.len();
@@ -167,6 +170,7 @@ impl TicTacToeAgent for MonteCarloAgent {
 
         let (sender, receiver) = mpsc::channel();
 
+        let now = Instant::now();
         for (row, col) in valid_moves {
             // need a mutable copy here so we can use recursive backtracking without needing to make
             // a copy of the board at each step
@@ -207,8 +211,10 @@ impl TicTacToeAgent for MonteCarloAgent {
         }
 
         println!(
-            "Chosen move: {:?}, total playouts: {}",
-            best_rowcol, total_playouts
+            "Chosen move: {:?}, total playouts: {}, choosing took {:?}",
+            best_rowcol,
+            total_playouts,
+            now.elapsed()
         );
 
         best_rowcol
@@ -220,7 +226,7 @@ impl MonteCarloAgent {
         MonteCarloAgent { player }
     }
 
-    fn get_valid_moves(&self, board: &Board) -> Vec<(usize, usize)> {
+    fn get_valid_moves(&self, board: &TicTacToeBoard) -> Vec<(usize, usize)> {
         let mut valid_moves = Vec::new();
         for (i, cell) in board.cells.iter().enumerate() {
             if let Empty = cell {
@@ -235,7 +241,7 @@ impl MonteCarloAgent {
     /// before it reaches its playout_threshold.
     fn score_move(
         &self,
-        board: &mut Board,
+        board: &mut TicTacToeBoard,
         player: Player,
         row: usize,
         col: usize,
@@ -298,7 +304,7 @@ pub enum Cell {
 
 /// Store the size and state of the tic-tac-toe board.
 #[derive(Clone, Debug)]
-pub struct Board {
+pub struct TicTacToeBoard {
     // dimension of the board (total number of cells = size * size)
     size: usize,
     // for example: 3x3 grid would be a vec of length 9
@@ -308,10 +314,10 @@ pub struct Board {
 }
 
 /// Representation of an N-dimensional tic-tac-toe board
-impl Board {
+impl TicTacToeBoard {
     /// Return a new Board of (size * size) cells.
-    pub fn new(size: usize) -> Board {
-        Board {
+    pub fn new(size: usize) -> TicTacToeBoard {
+        TicTacToeBoard {
             cells: vec![Empty; (size * size) as usize],
             size,
             is_p1_turn: true,
@@ -400,47 +406,83 @@ impl Board {
     }
 
     /// Return if the line defined by the filter_fn is filled with cells of type player.
-    fn line_is_filled_with_player(&self, player: Player, filter_fn: &Fn(usize) -> bool) -> bool {
-        let matching_cells: Vec<(usize, &Cell)> = self
-            .cells
-            .iter()
-            .enumerate()
-            .filter(|&(i, x)| {
-                filter_fn(i)
-                    && match x {
-                        Full(cplayer) => &player == cplayer,
-                        _ => false,
+    fn player_fills_line(&self, player: Player, filter_fn: &Fn(usize) -> bool) -> bool {
+        let mut player_count = 0;
+        for i in 0..self.size * self.size {
+            if filter_fn(i) {
+                if let Full(p) = self.cells[i] {
+                    if p == player {
+                        player_count += 1;
                     }
-            })
-            .collect();
+                }
+            }
+        }
 
-        matching_cells.len() == self.size
+        player_count == self.size
     }
 
-    /// Did the last move played at (r,c) by player win the game?
-    fn move_wins_game(&self, r: usize, c: usize, player: Player) -> bool {
+    /// Did the last move played at (row, col) by player win the game?
+    fn move_wins_game(&self, row: usize, col: usize, player: Player) -> bool {
         // check row
-        if self.line_is_filled_with_player(player, &|i| i / self.size == r) {
+        if self.player_fills_line(player, &|i| i / self.size == row) {
             return true;
         }
 
         // check col
-        if self.line_is_filled_with_player(player, &|i| i % self.size == c) {
+        if self.player_fills_line(player, &|i| i % self.size == col) {
             return true;
         }
 
-        // check \ diagonal if relevant
-        if self.line_is_filled_with_player(player, &|i| i % self.size == i / self.size) {
-            return true;
+        // check \ diag
+        if row == col {
+            if self.player_fills_line(player, &|i| i % self.size == i / self.size) {
+                return true;
+            }
         }
 
-        // check / diagonal if relevant
-        if self.line_is_filled_with_player(player, &|i| {
-            (i % self.size) + (i / self.size) == self.size - 1
-        }) {
-            return true;
+        // check / diag
+        if row + col == self.size - 1 {
+            if self.player_fills_line(player, &|i| {
+                (i % self.size) + (i / self.size) == self.size - 1
+            }) {
+                return true;
+            }
         }
 
         false
     }
+}
+
+#[test]
+fn test_player_fills_line() {
+    // row
+    let mut board = TicTacToeBoard::new(3);
+    for i in 0..3 {
+        board.cells[i * board.size] = Full(P1);
+    }
+    assert!(board.player_fills_line(P1, &|i| i % board.size == 0));
+
+    // col
+    let mut board = TicTacToeBoard::new(3);
+    for i in 0..3 {
+        board.cells[i] = Full(P1);
+    }
+    assert!(board.player_fills_line(P1, &|i| i / board.size == 0));
+
+    // diag \
+    let mut board = TicTacToeBoard::new(3);
+    for i in 0..3 {
+        board.cells[i * board.size + i] = Full(P1);
+    }
+    assert!(board.player_fills_line(P1, &|i| i % board.size == i / board.size));
+
+    // diag /
+    let mut board = TicTacToeBoard::new(3);
+    for i in 0..3 {
+        board.cells[board.size + i * board.size - i - 1] = Full(P1);
+    }
+    assert!(
+        board.player_fills_line(P1, &|i| (i % board.size) + (i / board.size)
+            == board.size - 1)
+    );
 }
