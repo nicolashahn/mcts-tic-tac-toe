@@ -9,7 +9,8 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Instant;
 
-use rand::{thread_rng, Rng};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use Cell::{Empty, Full};
 use EndState::{Draw, Winner};
@@ -20,7 +21,8 @@ use Player::{P1, P2};
 pub const BOARD_SIZE: usize = 5;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
-// on my Ryzen 2600 w/threading, it takes about 5 seconds to generate this many playouts
+// on my Ryzen 2600 w/threading, it takes about 5 seconds to generate 1,000,000 playouts when
+// BOARD_SIZE = 5
 const PLAYOUT_BUDGET: usize = 1_000_000;
 
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
@@ -274,7 +276,8 @@ impl MonteCarloAgent {
         // if this is an intermediate node:
         // get next possible moves for the opposing player
         let mut valid_moves = self.get_valid_moves(board);
-        thread_rng().shuffle(&mut valid_moves);
+        let mut rng = thread_rng();
+        valid_moves.shuffle(&mut rng);
         let opp = player.get_opponent();
 
         // recurse to the possible subsequent moves and score them
