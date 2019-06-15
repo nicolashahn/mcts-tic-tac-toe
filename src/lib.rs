@@ -1,7 +1,5 @@
-/// Tic-tac-toe implementation and a Monte Carlo tree search agent.
+/// Monte Carlo tree search agent for Tic-tac-toe.
 extern crate rand;
-#[macro_use]
-extern crate cached;
 
 use std::io;
 use std::ops::Add;
@@ -18,7 +16,7 @@ use GameState::{Ended, Ongoing};
 use Player::{P1, P2};
 
 // TODO add command line flags to control board size, player agent types, playout budget
-pub const BOARD_SIZE: usize = 5;
+pub const BOARD_SIZE: usize = 4;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
 // on my Ryzen 2600 w/threading, it takes about 5 seconds to generate 1,000,000 playouts when
@@ -31,17 +29,6 @@ const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 const BAD_INPUT: &str = "bad input";
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
-
-cached! {
-    FACTORIAL;
-    fn factorial(i: usize) -> usize = {
-        if i <= 1 {
-            return i;
-        }
-
-        factorial(i - 1) * i
-    }
-}
 
 /// At a given game state, the summed wins/losses/draw scores, as well as the total number of
 /// playouts that have been tried.
@@ -254,11 +241,10 @@ impl MonteCarloAgent {
             // backtrack once we're done calculating
             board.undo_move(row, col);
 
-            // score is factorial of the number of empty cells remaining because that's how many
-            // different end states there could be if we were able to keep playing moves after
-            // someone wins the game, up until the board is full - this is a way of weighting
-            // more immediate (less moves to get to) wins/losses more heavily than farther out ones
-            let score = factorial(board.num_cells_remaining()) + 1;
+            // the score (num cells remaining)^2 + 1 weights outcomes that are closer in the search
+            // space to the current move higher
+            // end states where the board is fuller are less likely
+            let score = board.num_cells_remaining() * board.num_cells_remaining() + 1;
 
             // return score/2 if win, -score if lose, 0 if draw
             // a win is only worth half as much as a loss because:
@@ -379,7 +365,7 @@ impl TicTacToeBoard {
         self.num_cells_remaining() == 0
     }
 
-    /// Return Ok(Some(player)) if game is over, Ok(None) if it continues, Err if invalid move.
+    /// Return Ok(Ended(_) if game is over, Ok(Ongoing) if it continues, Err if invalid move.
     pub fn enter_move(
         &mut self,
         row: usize,

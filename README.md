@@ -45,6 +45,4 @@ interface for playing against it, written in Rust.
 - Match recordings
   - Write during a match to a file, replay in UI through a pair of `RecordedAgent`s
 - Command line flags for changing board size, player types, playout budget parameters
-- Calculate score in a way that doesn't lead to int overflow when the board size becomes
-  large (due to `factorial` function)
 - Tests (maybe this should be higher in the list)
