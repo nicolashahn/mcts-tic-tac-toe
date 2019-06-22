@@ -19,8 +19,6 @@ use Player::{P1, P2};
 pub const BOARD_SIZE: usize = 4;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
-// on my Ryzen 2600 w/threading, it takes about 5 seconds to generate 1,000,000 playouts when
-// BOARD_SIZE = 5
 const PLAYOUT_BUDGET: usize = 1_000_000;
 
 const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
@@ -139,18 +137,17 @@ impl HumanAgent {
 }
 
 #[derive(Clone, Debug)]
-/// AI agent that plays using Monte Carlo tree search to choose moves.
-/// TODO eventually store interior node scores here so we don't need to check entire tree of
-/// possible games at every turn
-pub struct MonteCarloAgent {
+/// AI agent that plays using tree search to choose moves - but does not remember tree expansions
+/// that have been calculated in prior moves. Not a true Monte Carlo tree search agent.
+pub struct ForgetfulSearchAgent {
     player: Player,
 }
 
-impl TicTacToeAgent for MonteCarloAgent {
+impl TicTacToeAgent for ForgetfulSearchAgent {
     /// Agent chooses the best available move
     fn choose_move(&self, board: &TicTacToeBoard) -> (usize, usize) {
         println!("{:?} AI is thinking...", self.player);
-        let valid_moves = self.get_valid_moves(board);
+        let valid_moves = board.get_valid_moves();
         let num_moves = valid_moves.len();
 
         let mut max_score = -((2 as isize).pow(62));
@@ -210,19 +207,9 @@ impl TicTacToeAgent for MonteCarloAgent {
     }
 }
 
-impl MonteCarloAgent {
-    pub fn new(player: Player) -> MonteCarloAgent {
-        MonteCarloAgent { player }
-    }
-
-    fn get_valid_moves(&self, board: &TicTacToeBoard) -> Vec<(usize, usize)> {
-        let mut valid_moves = Vec::new();
-        for (i, cell) in board.cells.iter().enumerate() {
-            if let Empty = cell {
-                valid_moves.push((i / board.size, i % board.size));
-            }
-        }
-        valid_moves
+impl ForgetfulSearchAgent {
+    pub fn new(player: Player) -> ForgetfulSearchAgent {
+        ForgetfulSearchAgent { player }
     }
 
     /// Scores a given move by playing it out on a theoretical board alternating between the agent and
@@ -244,7 +231,8 @@ impl MonteCarloAgent {
             // the score (num cells remaining)^2 + 1 weights outcomes that are closer in the search
             // space to the current move higher
             // end states where the board is fuller are less likely
-            let score = board.num_cells_remaining() * board.num_cells_remaining() + 1;
+            let cells_remaining = board.get_valid_moves().len();
+            let score = cells_remaining * cells_remaining + 1;
 
             // return score/2 if win, -score if lose, 0 if draw
             // a win is only worth half as much as a loss because:
@@ -261,7 +249,7 @@ impl MonteCarloAgent {
 
         // if this is an intermediate node:
         // get next possible moves for the opposing player
-        let mut valid_moves = self.get_valid_moves(board);
+        let mut valid_moves = board.get_valid_moves();
         let mut rng = thread_rng();
         valid_moves.shuffle(&mut rng);
         let opp = player.get_opponent();
@@ -344,25 +332,21 @@ impl TicTacToeBoard {
         println!("\n");
     }
 
+    /// Used in the theoretical playouts that tree search agents use to backtrack after reaching an
+    /// end state. Enables more efficient search b/c we don't need to create copies of the board.
     fn undo_move(&mut self, r: usize, c: usize) {
         self.cells[r * self.size + c] = Empty;
     }
 
-    fn num_cells_remaining(&self) -> usize {
-        let empties: Vec<&Cell> = self
-            .cells
-            .iter()
-            .filter(|c| match c {
-                Empty => true,
-                _ => false,
-            })
-            .collect();
-
-        empties.len()
-    }
-
-    fn no_moves_remaining(&self) -> bool {
-        self.num_cells_remaining() == 0
+    /// Return a vector of (row, col) legal moves the player can choose.
+    fn get_valid_moves(&self) -> Vec<(usize, usize)> {
+        let mut valid_moves = Vec::new();
+        for (i, cell) in self.cells.iter().enumerate() {
+            if let Empty = cell {
+                valid_moves.push((i / self.size, i % self.size));
+            }
+        }
+        valid_moves
     }
 
     /// Return Ok(Ended(_) if game is over, Ok(Ongoing) if it continues, Err if invalid move.
@@ -385,7 +369,7 @@ impl TicTacToeBoard {
             return Ok(Ended(Winner(player)));
         }
 
-        if self.no_moves_remaining() {
+        if self.get_valid_moves().len() == 0 {
             return Ok(Ended(Draw));
         }
 

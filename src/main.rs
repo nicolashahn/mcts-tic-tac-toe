@@ -4,13 +4,15 @@ use std::io;
 use mcts_tic_tac_toe::EndState::{Draw, Winner};
 use mcts_tic_tac_toe::GameState::{Ended, Ongoing};
 use mcts_tic_tac_toe::Player::{P1, P2};
-use mcts_tic_tac_toe::{HumanAgent, MonteCarloAgent, TicTacToeAgent, TicTacToeBoard, BOARD_SIZE};
+use mcts_tic_tac_toe::{
+    ForgetfulSearchAgent, HumanAgent, TicTacToeAgent, TicTacToeBoard, BOARD_SIZE,
+};
 
 fn main() -> io::Result<()> {
     let mut board = TicTacToeBoard::new(BOARD_SIZE);
-    //let agent1 = MonteCarloAgent::new(P1);
+    //let agent1 = ForgetfulSearchAgent::new(P1);
     let agent1 = HumanAgent::new();
-    let agent2 = MonteCarloAgent::new(P2);
+    let agent2 = ForgetfulSearchAgent::new(P2);
 
     println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
     board.display();
