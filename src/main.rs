@@ -1,46 +1,22 @@
 /// Command line interface for playing tic-tac-toe against an AI.
 use std::io;
 
-use mcts_tic_tac_toe::EndState::{Draw, Winner};
-use mcts_tic_tac_toe::GameState::{Ended, Ongoing};
-use mcts_tic_tac_toe::Player::{P1, P2};
-use mcts_tic_tac_toe::{
-    ForgetfulSearchAgent, HumanAgent, TicTacToeAgent, TicTacToeBoard, BOARD_SIZE,
-};
+use agents::{ForgetfulSearchAgent, HumanAgent};
+use mcts::{agents, play, tic_tac_toe};
+use tic_tac_toe::{Player, TicTacToeBoard};
 
+const BOARD_SIZE: usize = 5;
+// number of random games to play out from a given game state
+// stop after we reach or exceed this number
+const PLAYOUT_BUDGET: usize = 1_000_000;
+
+// TODO add command line flags to control board size, player agent types, playout budget
 fn main() -> io::Result<()> {
     let mut board = TicTacToeBoard::new(BOARD_SIZE);
-    //let agent1 = ForgetfulSearchAgent::new(P1);
     let agent1 = HumanAgent::new();
-    let agent2 = ForgetfulSearchAgent::new(P2);
+    // To see two AI agents duel each other:
+    //let agent1 = ForgetfulSearchAgent::new(Player::P1, PLAYOUT_BUDGET);
+    let agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);
 
-    println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
-    board.display();
-
-    loop {
-        let player = match board.is_p1_turn {
-            true => P1,
-            false => P2,
-        };
-        let rc = match player {
-            P1 => agent1.choose_move(&board),
-            P2 => agent2.choose_move(&board),
-        };
-
-        let (row, col) = rc;
-        match board.enter_move(row, col, player) {
-            Ok(Ended(endstate)) => {
-                board.display();
-                match endstate {
-                    Winner(player) => println!("Game over, {:?} won!", player),
-                    Draw => println!("Game over, it's a draw!"),
-                }
-                return Ok(());
-            }
-            Ok(Ongoing) => board.display(),
-            Err(msg) => {
-                println!("Oops, illegal move: {}", msg);
-            }
-        };
-    }
+    play(&agent1, &agent2, &mut board)
 }

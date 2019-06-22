@@ -45,7 +45,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcts-tic-tac-toe"
+name = "mcts"
 version = "0.1.0"
 dependencies = [
  "cached 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",

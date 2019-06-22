@@ -12,8 +12,9 @@ interface for playing against it, written in Rust.
     less than the playout budget, so it is able to evaluate every possible game state
     at any move
 - Multithreaded 
-  - Can compute roughly 200,000 playouts/sec on a 5x5 board with a six-core Ryzen 2600
-- Reports score, number of playouts, and time spent for move evaluations
+  - Can compute roughly 6-7 million playouts/sec on a 5x5 board (maximum game move depth
+    of 25) with a six-core Ryzen 2600 and `--release` build
+- Reports estimated score, number of playouts, and time spent for move evaluations
 - Can use the interface to play against the AI, have it play against itself, or play
   against another human player
 - Currently, only has purely random tree search for move evaluation
