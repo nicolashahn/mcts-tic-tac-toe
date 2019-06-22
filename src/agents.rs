@@ -239,3 +239,23 @@ impl ForgetfulSearchAgent {
         outcomes
     }
 }
+
+#[derive(Clone, Debug)]
+/// Agent that makes random moves.
+pub struct RandomAgent {
+    player: Player,
+}
+
+impl TicTacToeAgent for RandomAgent {
+    fn choose_move(&self, board: &TicTacToeBoard) -> (usize, usize) {
+        let valid_moves = board.get_valid_moves();
+        let mut rng = thread_rng();
+        *valid_moves.choose(&mut rng).unwrap()
+    }
+}
+
+impl RandomAgent {
+    pub fn new(player: Player) -> RandomAgent {
+        RandomAgent { player }
+    }
+}
