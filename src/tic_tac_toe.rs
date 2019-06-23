@@ -39,7 +39,7 @@ impl Player {
 
 /// An agent that can choose a move from a tic-tac-toe board.
 pub trait TicTacToeAgent {
-    fn choose_move(&self, board: &TicTacToeBoard) -> (usize, usize);
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize);
 }
 
 /// Represents a single cell of the tic-tac-toe board.
