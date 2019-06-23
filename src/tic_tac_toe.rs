@@ -43,14 +43,14 @@ pub trait TicTacToeAgent {
 }
 
 /// Represents a single cell of the tic-tac-toe board.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Cell {
     Empty,
     Full(Player),
 }
 
 /// Store the size and state of the tic-tac-toe board.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TicTacToeBoard {
     // dimension of the board (total number of cells = size * size)
     size: usize,
@@ -60,6 +60,7 @@ pub struct TicTacToeBoard {
     pub is_p1_turn: bool,
 }
 
+// TODO make generic GameBoard trait so agents can be used with other board games
 /// Representation of an N-dimensional tic-tac-toe board
 impl TicTacToeBoard {
     /// Return a new Board of (size * size) cells.
