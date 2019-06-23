@@ -10,12 +10,14 @@ const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 
 /// Did the game end in a draw or was there a winner?
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EndState {
     Winner(Player),
     Draw,
 }
 
 /// Has the game ended or is it ongoing?
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GameState {
     Ended(EndState),
     Ongoing,

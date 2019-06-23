@@ -14,7 +14,7 @@ use rand::thread_rng;
 use crate::tic_tac_toe;
 
 use tic_tac_toe::EndState::{Draw, Winner};
-use tic_tac_toe::GameState::Ended;
+use tic_tac_toe::GameState::{Ended, Ongoing};
 use tic_tac_toe::Player::{P1, P2};
 use tic_tac_toe::{Player, TicTacToeAgent, TicTacToeBoard, ALPHABET};
 
@@ -251,9 +251,7 @@ pub struct RandomAgent {
 
 impl TicTacToeAgent for RandomAgent {
     fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
-        let valid_moves = board.get_valid_moves();
-        let mut rng = thread_rng();
-        *valid_moves.choose(&mut rng).unwrap()
+        Self::get_random_move_choice(board)
     }
 }
 
@@ -261,7 +259,18 @@ impl RandomAgent {
     pub fn new(player: Player) -> RandomAgent {
         RandomAgent { player }
     }
+
+    pub fn get_random_move_choice(board: &TicTacToeBoard) -> (usize, usize) {
+        let valid_moves = board.get_valid_moves();
+        let mut rng = thread_rng();
+        *valid_moves.choose(&mut rng).unwrap()
+    }
 }
+
+// These may need to be tweaked
+const WIN_REWARD: usize = 2;
+const DRAW_REWARD: usize = 1;
+const LOSS_REWARD: usize = 0;
 
 #[derive(Clone, Debug, PartialEq)]
 /// Tree node for the Monte Carlo search tree.
@@ -284,9 +293,10 @@ pub struct TreeNode {
 
 impl TreeNode {
     /// Create a new TreeNode from the board state, a parent node, and a move: copy the board,
-    /// apply the move, and then set all other fields appropriately.
+    /// apply the move, and then set all other fields appropriately. If the move did not result in
+    /// an end state, simulate a random game and return the result as a score
     fn from_expansion(
-        agent_player: &Player,
+        agent_player: Player,
         board: &TicTacToeBoard,
         node: &TreeNode,
         move_: (usize, usize),
@@ -295,13 +305,18 @@ impl TreeNode {
         let opposing_player = node.player.get_opponent();
         let (row, col) = move_;
         let (is_end_state, score) = match new_board.enter_move(row, col, opposing_player) {
-            Ok(Ongoing) => (false, 0),
-            // win=2, loss=0, draw=1 - this may need to be revisited
-            Ok(Ended(Draw)) => (true, 1),
-            Ok(Ended(Winner(winner))) => match winner {
-                agent_player => (true, 2),
-                _ => (true, 0),
-            },
+            Ok(Ongoing) => (
+                false,
+                node.simulate_random_playout(&mut new_board.clone(), agent_player),
+            ),
+            Ok(Ended(Draw)) => (true, DRAW_REWARD),
+            Ok(Ended(Winner(player))) => {
+                if player == agent_player {
+                    (true, WIN_REWARD)
+                } else {
+                    (true, LOSS_REWARD)
+                }
+            }
             Err(msg) => panic!(
                 "error in TreeNode.from_expansion when calling board.enter_move():{}",
                 msg
@@ -315,6 +330,32 @@ impl TreeNode {
             visits: 1,
             score,
             children: HashMap::new(),
+        }
+    }
+
+    /// Play out a game randomly from this node and return the score.
+    fn simulate_random_playout(
+        &self,
+        theoretical_board: &mut TicTacToeBoard,
+        player: Player,
+    ) -> usize {
+        loop {
+            let (row, col) = RandomAgent::get_random_move_choice(&theoretical_board);
+            let curr_player = player.get_opponent();
+            match theoretical_board.enter_move(row, col, curr_player) {
+                Ok(state) => match state {
+                    Ongoing => continue,
+                    Ended(Draw) => return DRAW_REWARD,
+                    Ended(Winner(winner)) => {
+                        if winner == player {
+                            return WIN_REWARD;
+                        } else {
+                            return LOSS_REWARD;
+                        }
+                    }
+                },
+                Err(msg) => panic!("Err in TreeNode.simulate_random_playout(): {}", msg),
+            };
         }
     }
 }
@@ -365,7 +406,7 @@ impl MCTSAgent {
                 None => {
                     new_child = Some((
                         move_,
-                        TreeNode::from_expansion(&self.player, &board, &node, move_),
+                        TreeNode::from_expansion(self.player, &board, &node, move_),
                     ));
                     break;
                 }
