@@ -39,7 +39,8 @@ impl Player {
     }
 }
 
-/// An agent that can choose a move from a tic-tac-toe board.
+/// An agent that can choose a move from a tic-tac-toe board. Self is mutable because AI agents
+/// may need to update their state as they search for moves.
 pub trait TicTacToeAgent {
     fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize);
 }

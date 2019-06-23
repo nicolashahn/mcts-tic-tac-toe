@@ -184,8 +184,8 @@ impl ForgetfulSearchAgent {
     }
 
     /// Scores a given move by playing it out on a theoretical board alternating between the agent and
-    /// the opponent player taking turns until it reaches an end state as many times as it can
-    /// before it reaches its playout_threshold.
+    /// the opponent player taking turns (by recursively calling itself) until it reaches an end
+    /// state as many times as it can before it reaches its playout_threshold.
     fn score_move(
         &self,
         board: &mut TicTacToeBoard,
@@ -358,10 +358,75 @@ impl TreeNode {
             };
         }
     }
+
+    /// One round of tree expansion. Follow a path down until we get to a leaf that is not an
+    /// end state, then playout until we hit an end state, creating more nodes as we go, and
+    /// updating the parents back up after we reach the end state node.
+    fn expand(&mut self, board: &TicTacToeBoard, player: Player) -> usize {
+        let mut new_child: Option<((usize, usize), TreeNode)> = None;
+        for move_ in board.get_valid_moves() {
+            match self.children.get(&move_) {
+                None => {
+                    new_child = Some((
+                        move_,
+                        TreeNode::from_expansion(player, &board, &self, move_),
+                    ));
+                    break;
+                }
+                _ => (),
+            }
+        }
+        self.visits += 1;
+        if let Some((move_, child_self)) = new_child {
+            self.score += child_self.score;
+            self.children.insert(move_, child_self);
+            return self.score;
+        };
+
+        // if we got here, all children have been visited, so we need to visit their children
+        let mut score = 0;
+        for (_, child) in self.children.iter_mut() {
+            if !child.is_fully_expanded {
+                score = child.expand(board, player);
+            }
+        }
+        self.score += score;
+        // then mark as fully visited if necessary
+        for (_, child) in self.children.iter() {
+            if !child.is_fully_expanded {
+                return score;
+            }
+        }
+        self.is_fully_expanded = true;
+
+        score
+    }
+
+    /// Get the move for the child with the highest score for this node (representing the best move
+    /// we can make from this state). Uses the expression found here to calculate node value:
+    /// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
+    fn get_best_move(&self, exploration_value: f64) -> (usize, usize) {
+        let mut best_val = -(f64::powf(2., 63.));
+        let mut best_moves: Vec<(usize, usize)> = vec![];
+        for (&move_, child) in self.children.iter() {
+            let node_val = child.score as f64 / child.visits as f64
+                + exploration_value * f64::sqrt(f64::ln(self.visits as f64) / child.visits as f64);
+            if node_val > best_val {
+                best_val = node_val;
+                best_moves = vec![move_];
+            } else if node_val == best_val {
+                best_moves.push(move_);
+            }
+        }
+        let mut rng = thread_rng();
+
+        *best_moves.choose(&mut rng).unwrap()
+    }
 }
 
 #[derive(Clone, Debug)]
-/// Monte Carlo tree search agent.
+/// Monte Carlo tree search agent. Based on:
+/// https://github.com/pbsinclair42/MCTS/blob/master/mcts.py
 pub struct MCTSAgent {
     player: Player,
     playout_budget: usize,
@@ -377,7 +442,16 @@ impl TicTacToeAgent for MCTSAgent {
 }
 
 impl MCTSAgent {
-    fn new(player: Player, playout_budget: usize, root: TreeNode) -> Self {
+    pub fn new(player: Player, playout_budget: usize, board_copy: TicTacToeBoard) -> Self {
+        let root = TreeNode {
+            board: board_copy,
+            player,
+            is_end_state: false,
+            is_fully_expanded: false,
+            visits: 0,
+            score: 0,
+            children: HashMap::new(),
+        };
         MCTSAgent {
             player,
             playout_budget,
@@ -390,85 +464,9 @@ impl MCTSAgent {
     fn search(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
         // TODO multithread
         for _ in 0..self.playout_budget {
-            let _ = self.expand(&board, &mut self.root);
+            let _ = self.root.expand(&board, self.player);
         }
 
-        self.get_best_move(&mut self.root, 0)
-    }
-
-    /// One round of tree expansion. Follow a path down until we get to a leaf that is not an
-    /// end state, then playout until we hit an end state, creating more nodes as we go, and
-    /// updating the parents back up after we reach the end state node.
-    fn expand(&self, board: &TicTacToeBoard, node: &mut TreeNode) -> usize {
-        let mut new_child: Option<((usize, usize), TreeNode)> = None;
-        for move_ in board.get_valid_moves() {
-            match node.children.get(&move_) {
-                None => {
-                    new_child = Some((
-                        move_,
-                        TreeNode::from_expansion(self.player, &board, &node, move_),
-                    ));
-                    break;
-                }
-                _ => (),
-            }
-        }
-        node.visits += 1;
-        if let Some((move_, child_node)) = new_child {
-            node.children.insert(move_, child_node);
-            node.score += child_node.score;
-            return child_node.score;
-        };
-
-        // if we got here, all children have been visited, so we need to visit their children
-        let score = 0;
-        for (_, &child) in node.children.iter() {
-            if !child.is_fully_expanded {
-                score = self.expand(board, &mut child);
-            }
-        }
-        node.score += score;
-        // then mark as fully visited if necessary
-        for (_, &child) in node.children.iter() {
-            if !child.is_fully_expanded {
-                return score;
-            }
-        }
-        node.is_fully_expanded = true;
-
-        score
-    }
-
-    /// Get the move for the child with the highest score for this node (representing the best move
-    /// we can make from this state).
-    fn get_best_move(&self, node: &TreeNode, exploration_value: usize) -> (usize, usize) {
-        let mut best_val = -(f64::powf(2., 63.));
-        let best_moves: Vec<(usize, usize)> = vec![];
-        for (&move_, &child) in node.children.iter() {
-            let node_val = child.score as f64 / child.visits as f64
-                + exploration_value as f64
-                    * f64::sqrt(f64::ln(node.visits as f64) / child.visits as f64);
-            if node_val > best_val {
-                best_val = node_val;
-                best_moves = vec![move_];
-            } else if node_val == best_val {
-                best_moves.push(move_);
-            }
-        }
-        let mut rng = thread_rng();
-
-        *best_moves.choose(&mut rng).unwrap()
-    }
-
-    fn get_action(&self, best_child: &TreeNode) -> (usize, usize) {
-        for (&move_, &node) in self.root.children.iter() {
-            println!("{:?} {:?}", move_, node);
-            if node == *best_child {
-                return move_;
-            }
-        }
-        panic!(
-            "the best_child node passed to get_best_children wasn't found in the root's children"
-        );
+        self.root.get_best_move(0.0)
     }
 }

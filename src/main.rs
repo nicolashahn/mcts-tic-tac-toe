@@ -1,7 +1,7 @@
 /// Command line interface for playing tic-tac-toe against an AI.
 use std::io;
 
-use agents::{ForgetfulSearchAgent, HumanAgent};
+use agents::{ForgetfulSearchAgent, HumanAgent, MCTSAgent};
 use mcts::{agents, play, tic_tac_toe};
 use tic_tac_toe::{Player, TicTacToeBoard};
 
@@ -13,10 +13,11 @@ const PLAYOUT_BUDGET: usize = 1_000_000;
 // TODO add command line flags to control board size, player agent types, playout budget
 fn main() -> io::Result<()> {
     let mut board = TicTacToeBoard::new(BOARD_SIZE);
-    let agent1 = HumanAgent::new();
+    let mut agent1 = HumanAgent::new();
     // To see two AI agents duel each other:
     //let agent1 = ForgetfulSearchAgent::new(Player::P1, PLAYOUT_BUDGET);
-    let agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);
+    //let mut agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);
+    let mut agent2 = MCTSAgent::new(Player::P2, PLAYOUT_BUDGET, board.clone());
 
-    play(&agent1, &agent2, &mut board)
+    play(&mut agent1, &mut agent2, &mut board)
 }

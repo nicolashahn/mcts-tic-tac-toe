@@ -9,8 +9,8 @@ use tic_tac_toe::{TicTacToeAgent, TicTacToeBoard};
 
 /// Two agents (human or AI) play against each other.
 pub fn play(
-    agent1: &TicTacToeAgent,
-    agent2: &TicTacToeAgent,
+    agent1: &mut TicTacToeAgent,
+    agent2: &mut TicTacToeAgent,
     board: &mut TicTacToeBoard,
 ) -> io::Result<()> {
     println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
