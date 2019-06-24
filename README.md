@@ -1,3 +1,5 @@
+### _NOTE: under construction_
+
 # Monte Carlo tree search Tic-Tac-Toe AI
 
 An AI agent that can play Tic-Tac-Toe using [Monte
