@@ -1,4 +1,6 @@
 /// Tic Tac Toe game interface.
+use std::fmt;
+
 use Cell::{Empty, Full};
 use EndState::{Draw, Winner};
 use GameState::{Ended, Ongoing};
@@ -53,14 +55,33 @@ pub enum Cell {
 }
 
 /// Store the size and state of the tic-tac-toe board.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct TicTacToeBoard {
     // dimension of the board (total number of cells = size * size)
-    size: usize,
+    pub size: usize,
     // for example: 3x3 grid would be a vec of length 9
-    cells: Vec<Cell>,
+    pub cells: Vec<Cell>,
     // who gets to make the next move?
     pub is_p1_turn: bool,
+}
+
+impl fmt::Debug for TicTacToeBoard {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut board_repr = String::new();
+        for cell in self.cells.iter() {
+            let cell_repr = match cell {
+                Empty => '.',
+                Full(P1) => 'o',
+                Full(P2) => 'x',
+            };
+            board_repr.push(cell_repr);
+        }
+        write!(
+            f,
+            "{{ TicTacToeBoard size: {}, cells: [{}], is_p1_turn: {} }}",
+            self.size, board_repr, self.is_p1_turn
+        )
+    }
 }
 
 // TODO make generic GameBoard trait so agents can be used with other board games
