@@ -20,7 +20,9 @@ use tic_tac_toe::{EndState, Player, TicTacToeAgent, TicTacToeBoard, ALPHABET};
 
 const BAD_INPUT: &str = "bad input";
 
-const DEFAULT_EXPLORATION_CONSTANT: f64 = 1.2;
+// From UCT formula, "theoretically equivalent to sqrt(2)" - see
+// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
+const DEFAULT_EXPLORATION_CONSTANT: f64 = 1.41421356237;
 
 // These may need to be tweaked
 const WIN_REWARD: isize = 1;
@@ -104,7 +106,8 @@ impl HumanAgent {
 
 #[derive(Clone, Debug)]
 /// AI agent that plays using tree search to choose moves - but does not remember tree expansions
-/// that have been calculated in prior moves. Not a true Monte Carlo tree search agent.
+/// that have been calculated in prior moves. Not a true Monte Carlo tree search agent, BUT it's
+/// blazing fast at raw playout computation.
 pub struct ForgetfulSearchAgent {
     player: Player,
     playout_budget: usize,
@@ -113,7 +116,7 @@ pub struct ForgetfulSearchAgent {
 impl TicTacToeAgent for ForgetfulSearchAgent {
     /// Agent chooses the best available move
     fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
-        println!("{:?} AI is thinking...", self.player);
+        println!("{:?} ForgetfulSearchAgent is thinking...", self.player);
         let valid_moves = board.get_valid_moves();
         let num_moves = valid_moves.len();
 
@@ -373,6 +376,7 @@ impl TreeNode {
     /// One round of tree expansion. Follow a path down until we get to a leaf that is not an
     /// end state, then playout until we hit an end state, creating more nodes as we go, and
     /// updating the parents back up after we reach the end state node.
+    /// TODO use UCT formula to choose child to expand
     fn expand(&mut self) -> EndState {
         if self.is_fully_expanded {
             // TODO this is a hack, do something more correct here
@@ -436,7 +440,7 @@ pub struct MCTSAgent {
 impl<'a> TicTacToeAgent for MCTSAgent {
     /// Agent chooses the best available move
     fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
-        println!("MCTSAgent {:?} is thinking...", self.player);
+        println!("{:?} MCTSAgent is thinking...", self.player);
         self.search(&board)
     }
 }
@@ -474,7 +478,7 @@ impl MCTSAgent {
             let _ = self.root.expand();
         }
 
-        self.get_best_move_and_promote_child(0.0)
+        self.get_best_move_and_promote_child()
     }
 
     /// Get the last move of the opponent, if we're not making the first move on the board.
@@ -502,13 +506,11 @@ impl MCTSAgent {
     /// we can make from this state). Uses the expression found here to calculate node value:
     /// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
     /// Also promote the child with the highest score to the root of the tree.
-    fn get_best_move_and_promote_child(&mut self, exploration_value: f64) -> (usize, usize) {
+    fn get_best_move_and_promote_child(&mut self) -> (usize, usize) {
         let mut best_val = -(f64::powf(2., 63.));
         let mut best_moves: Vec<(usize, usize)> = vec![];
         for (&move_, child) in self.root.children.iter() {
-            let node_val = child.score as f64 / child.visits as f64
-                + exploration_value
-                    * f64::sqrt(f64::ln(self.root.visits as f64) / child.visits as f64);
+            let node_val = child.score as f64 / child.visits as f64;
             println!("{:?} score: {}", child.board, node_val);
             if node_val > best_val {
                 best_val = node_val;

@@ -7,24 +7,29 @@ Carlo](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search) tree search, and a
 interface for playing against it, written in Rust.
 
 ## Features:
-- With the default playout budget (number of theoretical games for the AI to play
-  until a win/loss/draw per turn) of 1,000,000, it plays normal `BOARD_SIZE = 3`
-  Tic-Tac-Toe (as well as 4) optimally, usually does fairly well at 5
-  - With normal Tic-Tac-Toe, the number of possible games is 9! or 362,880, which is
-    less than the playout budget, so it is able to evaluate every possible game state
-    at any move
-- Multithreaded 
-  - Can compute roughly 6-7 million playouts/sec on a 5x5 board (maximum game move depth
-    of 25) with a six-core Ryzen 2600 and `--release` build
 - Reports estimated score, number of playouts, and time spent for move evaluations
 - Can use the interface to play against the AI, have it play against itself, or play
   against another human player
-- Currently, only has purely random tree search for move evaluation
+- __MCTSAgent__
+  - Stores an internal tree of possible game states
+  - Retains states from previous moves
+  - Based on [pbsinclair42/MCTS](https://github.com/pbsinclair42/MCTS)
+- __ForgetfulSearchAgent__ (not a Monte Carlo search agent)
+  - With the default playout budget (number of theoretical games for the AI to play
+    until a win/loss/draw per turn) of 1,000,000, it plays normal `BOARD_SIZE = 3`
+    Tic-Tac-Toe (as well as 4) optimally, usually does fairly well at 5
+    - With normal Tic-Tac-Toe, the number of possible games is 9! or 362,880, which is
+      less than the playout budget, so it is able to evaluate every possible game state
+      at any move
+  - Multithreaded 
+    - Can compute roughly 6-7 million playouts/sec on a 5x5 board (maximum game move depth
+      of 25) with a six-core Ryzen 2600 and `--release` build
+  - Only has purely random tree search for move evaluation
 
 ## TODO:
+- Use [UCT](https://link.springer.com/chapter/10.1007%2F11871842_29) to choose nodes to
+  expand 
 - Detect symmetrical game states
-- Store tree scores and update for subsequent moves so we avoid unnecessary
-  recalculation
 - Tree pruning heuristics
   - Example: explore moves that block the opponent from getting (board size - 1) pieces
     in a single row/column/diagonal first
@@ -41,7 +46,6 @@ interface for playing against it, written in Rust.
     - Optionally, a heuristic function that will tell the agent which moves it should
       explore first
   - Other games to target:
-    - Checkers
     - Chess
     - [Ty Overby](https://github.com/TyOverby)'s "Four-not-three" hex grid game
     - Something not 2D-grid based?
