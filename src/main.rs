@@ -8,7 +8,7 @@ use tic_tac_toe::{Player, TicTacToeBoard};
 const BOARD_SIZE: usize = 3;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
-const PLAYOUT_BUDGET: usize = 10000;
+const PLAYOUT_BUDGET: usize = 50000;
 
 // TODO add command line flags to control board size, player agent types, playout budget
 fn main() -> io::Result<()> {

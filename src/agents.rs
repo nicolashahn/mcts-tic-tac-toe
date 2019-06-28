@@ -16,11 +16,16 @@ use crate::tic_tac_toe;
 use tic_tac_toe::EndState::{Draw, Winner};
 use tic_tac_toe::GameState::{Ended, Ongoing};
 use tic_tac_toe::Player::{P1, P2};
-use tic_tac_toe::{Player, TicTacToeAgent, TicTacToeBoard, ALPHABET};
+use tic_tac_toe::{EndState, Player, TicTacToeAgent, TicTacToeBoard, ALPHABET};
+
+const BAD_INPUT: &str = "bad input";
 
 const DEFAULT_EXPLORATION_CONSTANT: f64 = 1.2;
 
-const BAD_INPUT: &str = "bad input";
+// These may need to be tweaked
+const WIN_REWARD: isize = 1;
+const DRAW_REWARD: isize = 0;
+const LOSS_REWARD: isize = -1;
 
 /// At a given game state, the summed wins/losses/draw scores, as well as the total number of
 /// playouts that have been tried.
@@ -267,11 +272,6 @@ impl RandomAgent {
     }
 }
 
-// These may need to be tweaked
-const WIN_REWARD: isize = 2;
-const DRAW_REWARD: isize = 1;
-const LOSS_REWARD: isize = 0;
-
 #[derive(Clone, Debug, PartialEq)]
 /// Tree node for the Monte Carlo search tree.
 pub struct TreeNode {
@@ -296,41 +296,37 @@ impl TreeNode {
     /// Create a new TreeNode from the a parent node, and a move: copy the parent's board,
     /// apply the move, and then set all other fields appropriately. If the move did not result in
     /// an end state, simulate a random game and return the result as a score
-    fn from_expansion(parent: &TreeNode, move_: (usize, usize)) -> TreeNode {
+    fn from_expansion(parent: &TreeNode, move_: (usize, usize)) -> (TreeNode, EndState) {
         let mut board = parent.board.clone();
         let player = parent.player.get_opponent();
         let (row, col) = move_;
-        let (is_end_state, score) = match board.enter_move(row, col, player) {
+        let (is_end_state, endstate) = match board.enter_move(row, col, player) {
             Ok(Ongoing) => (
                 false,
                 TreeNode::simulate_random_playout(&mut board.clone(), player.get_opponent()),
             ),
-            Ok(Ended(Draw)) => (true, DRAW_REWARD),
-            Ok(Ended(Winner(winner))) => {
-                if player == winner {
-                    (true, WIN_REWARD)
-                } else {
-                    (true, LOSS_REWARD)
-                }
-            }
+            Ok(Ended(endstate)) => (true, endstate),
             Err(msg) => panic!(
                 "error in TreeNode.from_expansion when calling board.enter_move(): {}",
                 msg
             ),
         };
-        TreeNode {
+        let mut node = TreeNode {
             board,
             player,
             is_end_state,
             is_fully_expanded: is_end_state,
-            visits: 1,
-            score,
+            visits: 0,
+            score: 0,
             children: HashMap::new(),
-        }
+        };
+        node.update_from_endstate(endstate);
+
+        (node, endstate)
     }
 
     /// Play out a game randomly from this node and return the score.
-    fn simulate_random_playout(theoretical_board: &mut TicTacToeBoard, player: Player) -> isize {
+    fn simulate_random_playout(theoretical_board: &mut TicTacToeBoard, player: Player) -> EndState {
         let mut curr_player = player.get_opponent();
         loop {
             let (row, col) = RandomAgent::get_random_move_choice(&theoretical_board);
@@ -339,65 +335,91 @@ impl TreeNode {
             match game_state {
                 Ok(state) => match state {
                     Ongoing => (),
-                    Ended(Draw) => {
-                        return DRAW_REWARD;
-                    }
-                    Ended(Winner(winner)) => {
-                        if winner == player {
-                            return WIN_REWARD;
-                        } else {
-                            return LOSS_REWARD;
-                        }
-                    }
+                    Ended(endstate) => return endstate,
                 },
                 Err(msg) => panic!("Err in TreeNode.simulate_random_playout(): {}", msg),
             };
         }
     }
 
+    /// This node or child of this node returned an EndState and passed it back up the tree.
+    /// Update this node's visits and score appropriately.
+    fn update_from_endstate(&mut self, endstate: EndState) {
+        self.visits += 1;
+        self.score += match endstate {
+            Winner(winner) => match winner == self.player {
+                true => WIN_REWARD,
+                false => LOSS_REWARD,
+            },
+            Draw => DRAW_REWARD,
+        };
+    }
+
+    /// If all the node's children have been expanded, set the node as fully expanded.
+    fn update_fully_expanded(&mut self) {
+        if self.children.len() == self.board.get_valid_moves().len()
+            && self
+                .children
+                .values()
+                .filter(|&c| !c.is_fully_expanded)
+                .collect::<Vec<&TreeNode>>()
+                .len()
+                == 0
+        {
+            self.is_fully_expanded = true;
+        }
+    }
+
     /// One round of tree expansion. Follow a path down until we get to a leaf that is not an
     /// end state, then playout until we hit an end state, creating more nodes as we go, and
     /// updating the parents back up after we reach the end state node.
-    fn expand(&mut self) -> isize {
-        let mut new_child: Option<((usize, usize), TreeNode)> = None;
+    fn expand(&mut self) -> EndState {
+        if self.is_fully_expanded {
+            // TODO this is a hack, do something more correct here
+            return Draw;
+        }
+
         let mut rng = thread_rng();
         let mut moves = self.board.get_valid_moves();
         moves.shuffle(&mut rng);
         for move_ in moves.iter() {
             match self.children.get(&move_) {
+                // we have a move that we don't have a child node for
                 None => {
-                    new_child = Some((*move_, TreeNode::from_expansion(&self, *move_)));
-                    break;
+                    let (child_node, endstate) = TreeNode::from_expansion(&self, *move_);
+                    self.children.insert(*move_, child_node);
+                    self.update_from_endstate(endstate);
+                    self.update_fully_expanded();
+                    return endstate;
                 }
                 _ => (),
             }
         }
-        self.visits += 1;
-        if let Some((move_, child_self)) = new_child {
-            self.score += child_self.score;
-            self.children.insert(move_, child_self);
-            return self.score;
-        };
 
         // if we got here, all children have been visited, so we need to visit their children
-        let mut score = 0;
-        for move_ in moves {
+        for move_ in moves.iter() {
             let child = self.children.get_mut(&move_).unwrap();
             if !child.is_fully_expanded {
-                score = child.expand();
-            }
-            break;
-        }
-        self.score += score;
-        // then mark as fully visited if necessary
-        for (_, child) in self.children.iter() {
-            if !child.is_fully_expanded {
-                return score;
+                let endstate = child.expand();
+                self.update_from_endstate(endstate);
+                self.update_fully_expanded();
+                return endstate;
             }
         }
-        self.is_fully_expanded = true;
 
-        score
+        panic!("Should never be able to reach this");
+    }
+
+    #[allow(dead_code)]
+    /// Debugging helper to see the size of the search tree.
+    fn size_of_tree(&self) -> usize {
+        if self.children.len() == 0 {
+            return 1;
+        }
+        self.children
+            .values()
+            .try_fold(0usize, |acc, c| acc.checked_add(c.size_of_tree()))
+            .unwrap()
     }
 }
 
@@ -414,6 +436,7 @@ pub struct MCTSAgent {
 impl<'a> TicTacToeAgent for MCTSAgent {
     /// Agent chooses the best available move
     fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
+        println!("MCTSAgent {:?} is thinking...", self.player);
         self.search(&board)
     }
 }
@@ -445,10 +468,13 @@ impl MCTSAgent {
         }
         // TODO multithread
         for _ in 0..self.playout_budget {
+            if self.root.is_fully_expanded {
+                break;
+            }
             let _ = self.root.expand();
         }
 
-        self.get_best_move_and_update_root(0.0)
+        self.get_best_move_and_promote_child(0.0)
     }
 
     /// Get the last move of the opponent, if we're not making the first move on the board.
@@ -475,7 +501,8 @@ impl MCTSAgent {
     /// Get the move for the child with the highest score for this node (representing the best move
     /// we can make from this state). Uses the expression found here to calculate node value:
     /// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
-    fn get_best_move_and_update_root(&mut self, exploration_value: f64) -> (usize, usize) {
+    /// Also promote the child with the highest score to the root of the tree.
+    fn get_best_move_and_promote_child(&mut self, exploration_value: f64) -> (usize, usize) {
         let mut best_val = -(f64::powf(2., 63.));
         let mut best_moves: Vec<(usize, usize)> = vec![];
         for (&move_, child) in self.root.children.iter() {
