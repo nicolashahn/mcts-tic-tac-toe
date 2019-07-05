@@ -33,7 +33,7 @@ pub enum Player {
 }
 
 impl Player {
-    pub fn get_opponent(&self) -> Player {
+    pub fn get_opponent(self) -> Player {
         match self {
             P1 => P2,
             P2 => P1,
@@ -164,7 +164,7 @@ impl TicTacToeBoard {
             return Ok(Ended(Winner(player)));
         }
 
-        if self.get_valid_moves().len() == 0 {
+        if self.get_valid_moves().is_empty() {
             return Ok(Ended(Draw));
         }
 
@@ -202,19 +202,17 @@ impl TicTacToeBoard {
         }
 
         // check \ diag
-        if row == col {
-            if self.player_fills_line(player, &|i| i % self.size == i / self.size) {
-                return true;
-            }
+        if row == col && self.player_fills_line(player, &|i| i % self.size == i / self.size) {
+            return true;
         }
 
         // check / diag
-        if row + col == self.size - 1 {
-            if self.player_fills_line(player, &|i| {
+        if row + col == self.size - 1
+            && self.player_fills_line(player, &|i| {
                 (i % self.size) + (i / self.size) == self.size - 1
-            }) {
-                return true;
-            }
+            })
+        {
+            return true;
         }
 
         false

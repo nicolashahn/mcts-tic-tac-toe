@@ -2,6 +2,7 @@
 extern crate rand;
 
 use std::collections::HashMap;
+use std::f64;
 use std::io;
 use std::ops::Add;
 use std::sync::mpsc;
@@ -22,7 +23,7 @@ const BAD_INPUT: &str = "bad input";
 
 // From UCT formula, "theoretically equivalent to sqrt(2)" - see
 // https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
-const DEFAULT_EXPLORATION_CONSTANT: f64 = 1.41421356237;
+const DEFAULT_EXPLORATION_CONSTANT: f64 = f64::consts::SQRT_2;
 
 // These may need to be tweaked
 const WIN_REWARD: isize = 1;
@@ -78,7 +79,7 @@ impl HumanAgent {
     /// Example: "a2" means column 0, row 2
     fn get_move(&self) -> Result<(usize, usize), &'static str> {
         let mut input = String::new();
-        if let Err(_) = io::stdin().read_line(&mut input) {
+        if io::stdin().read_line(&mut input).is_err() {
             return Err(BAD_INPUT);
         }
         // at least 2 indices + \n
@@ -112,6 +113,7 @@ pub struct ForgetfulSearchAgent {
 
 impl TicTacToeAgent for ForgetfulSearchAgent {
     /// Agent chooses the best available move
+    #[allow(clippy::explicit_counter_loop)]
     fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
         println!("{:?} ForgetfulSearchAgent is thinking...", self.player);
         let valid_moves = board.get_valid_moves();
@@ -347,10 +349,13 @@ impl TreeNode {
     fn update_from_endstate(&mut self, endstate: EndState) {
         self.visits += 1;
         self.score += match endstate {
-            Winner(winner) => match winner == self.player {
-                true => WIN_REWARD,
-                false => LOSS_REWARD,
-            },
+            Winner(winner) => {
+                if winner == self.player {
+                    WIN_REWARD
+                } else {
+                    LOSS_REWARD
+                }
+            }
             Draw => DRAW_REWARD,
         };
     }
@@ -363,8 +368,7 @@ impl TreeNode {
                 .values()
                 .filter(|&c| !c.is_fully_expanded)
                 .collect::<Vec<&TreeNode>>()
-                .len()
-                == 0
+                .is_empty()
         {
             self.is_fully_expanded = true;
         }
@@ -384,16 +388,13 @@ impl TreeNode {
         let mut moves = self.board.get_valid_moves();
         moves.shuffle(&mut rng);
         for move_ in moves.iter() {
-            match self.children.get(&move_) {
+            if self.children.get(&move_).is_none() {
                 // we have a move that we don't have a child node for
-                None => {
-                    let (child_node, endstate) = TreeNode::from_expansion(&self, *move_);
-                    self.children.insert(*move_, child_node);
-                    self.update_from_endstate(endstate);
-                    self.update_fully_expanded();
-                    return endstate;
-                }
-                _ => (),
+                let (child_node, endstate) = TreeNode::from_expansion(&self, *move_);
+                self.children.insert(*move_, child_node);
+                self.update_from_endstate(endstate);
+                self.update_fully_expanded();
+                return endstate;
             }
         }
 
@@ -414,7 +415,7 @@ impl TreeNode {
     #[allow(dead_code)]
     /// Debugging helper to see the size of the search tree.
     fn size_of_tree(&self) -> usize {
-        if self.children.len() == 0 {
+        if self.children.is_empty() {
             return 1;
         }
         self.children
@@ -481,7 +482,7 @@ impl MCTSAgent {
     /// Get the last move of the opponent, if we're not making the first move on the board.
     fn get_opponents_last_move(&self, board: &TicTacToeBoard) -> Option<(usize, usize)> {
         for i in 0..board.cells.len() {
-            if self.root.board.cells.iter().nth(i) != board.cells.iter().nth(i) {
+            if self.root.board.cells.get(i) != board.cells.get(i) {
                 return Some((i / board.size, i % board.size));
             }
         }
@@ -503,6 +504,7 @@ impl MCTSAgent {
     /// we can make from this state). Uses the expression found here to calculate node value:
     /// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
     /// Also promote the child with the highest score to the root of the tree.
+    #[allow(clippy::float_cmp)]
     fn get_best_move_and_promote_child(&mut self) -> (usize, usize) {
         let mut best_val = -(f64::powf(2., 63.));
         let mut best_moves: Vec<(usize, usize)> = vec![];
