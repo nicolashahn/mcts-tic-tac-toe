@@ -13,7 +13,7 @@ const PLAYOUT_BUDGET: usize = 50000;
 // TODO add command line flags to control board size, player agent types, playout budget
 fn main() -> io::Result<()> {
     let mut board = TicTacToeBoard::new(BOARD_SIZE);
-    let mut agent1 = HumanAgent::new();
+    let mut agent1 = HumanAgent::default();
     // To see two AI agents duel each other:
     //let agent1 = ForgetfulSearchAgent::new(Player::P1, PLAYOUT_BUDGET);
     //let mut agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);

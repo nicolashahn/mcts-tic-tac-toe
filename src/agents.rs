@@ -55,6 +55,7 @@ impl Add for Outcomes {
 }
 
 /// An agent controlled by the user running the program.
+#[derive(Default)]
 pub struct HumanAgent {}
 
 impl TicTacToeAgent for HumanAgent {
@@ -72,10 +73,6 @@ impl TicTacToeAgent for HumanAgent {
 }
 
 impl HumanAgent {
-    pub fn new() -> HumanAgent {
-        HumanAgent {}
-    }
-
     /// Accept player input from stdin, parse into (row, col) indexes.
     /// Columns are letter indexes, rows are integers.
     /// Example: "a2" means column 0, row 2
