@@ -56,14 +56,15 @@ P2 MCTSAgent is thinking...
       - Can compute roughly 6-7 million playouts/sec on a 5x5 board (maximum game move depth
         of 25) with a six-core Ryzen 2600 and `--release` build
     - Only has purely random tree search for move evaluation
-  - __RandomAgent__
-    - Just chooses random (legal) moves
   - __HumanAgent__
     - Lets the user choose moves through a CLI user interface
+  - __RandomAgent__
+    - Just chooses random moves
 
 ## TODO:
 - Use [UCT](https://link.springer.com/chapter/10.1007%2F11871842_29) to choose nodes to
   expand 
+- Add multithreading to MCTSAgent as well
 - Detect symmetrical game states
 - Tree pruning heuristics
   - Example: explore moves that block the opponent from getting (board size - 1) pieces

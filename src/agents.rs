@@ -19,41 +19,13 @@ use tic_tac_toe::GameState::{Ended, Ongoing};
 use tic_tac_toe::Player::{P1, P2};
 use tic_tac_toe::{EndState, Player, TicTacToeAgent, TicTacToeBoard, ALPHABET};
 
+/*
+ * -----------
+ * Human Agent
+ * -----------
+ */
+
 const BAD_INPUT: &str = "bad input";
-
-// From UCT formula, "theoretically equivalent to sqrt(2)" - see
-// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
-const DEFAULT_EXPLORATION_CONSTANT: f64 = f64::consts::SQRT_2;
-
-// These may need to be tweaked
-const WIN_REWARD: isize = 1;
-const DRAW_REWARD: isize = 0;
-const LOSS_REWARD: isize = -1;
-
-/// At a given game state, the summed wins/losses/draw scores, as well as the total number of
-/// playouts that have been tried.
-#[derive(Clone, Debug, PartialEq)]
-struct Outcomes {
-    score: isize,
-    total: usize,
-}
-
-impl Outcomes {
-    fn new(score: isize, total: usize) -> Outcomes {
-        Outcomes { score, total }
-    }
-}
-
-impl Add for Outcomes {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        Self {
-            score: self.score + other.score,
-            total: self.total + other.total,
-        }
-    }
-}
 
 /// An agent controlled by the user running the program.
 #[derive(Default)]
@@ -82,7 +54,7 @@ impl HumanAgent {
         if io::stdin().read_line(&mut input).is_err() {
             return Err(BAD_INPUT);
         }
-        // 2 indices (row, col) + \n
+        // col letter, row number, '\n'
         if input.len() != 3 {
             return Err(BAD_INPUT);
         }
@@ -99,6 +71,67 @@ impl HumanAgent {
         };
 
         Ok((row, col))
+    }
+}
+
+/*
+ * ------------
+ * Random Agent
+ * ------------
+ */
+
+#[derive(Clone, Debug)]
+/// Agent that makes random moves.
+pub struct RandomAgent {
+    player: Player,
+}
+
+impl TicTacToeAgent for RandomAgent {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
+        Self::get_random_move_choice(board)
+    }
+}
+
+impl RandomAgent {
+    pub fn new(player: Player) -> RandomAgent {
+        RandomAgent { player }
+    }
+
+    pub fn get_random_move_choice(board: &TicTacToeBoard) -> (usize, usize) {
+        let valid_moves = board.get_valid_moves();
+        let mut rng = thread_rng();
+        *valid_moves.choose(&mut rng).unwrap()
+    }
+}
+
+/*
+ * ----------------------
+ * Forgetful Search Agent
+ * ----------------------
+ */
+
+/// At a given game state, the summed wins/losses/draw scores, as well as the total number of
+/// playouts that have been tried.
+#[derive(Clone, Debug, PartialEq)]
+struct Outcomes {
+    score: isize,
+    total: usize,
+}
+
+impl Outcomes {
+    fn new(score: isize, total: usize) -> Outcomes {
+        Outcomes { score, total }
+    }
+}
+
+impl Add for Outcomes {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            score: self.score + other.score,
+            total: self.total + other.total,
+        }
     }
 }
 
@@ -131,7 +164,6 @@ impl TicTacToeAgent for ForgetfulSearchAgent {
             // a copy of the board at each step
             let mut theoretical_board = board.clone();
             let theoretical_self = self.clone();
-            let theoretical_player = self.player.clone();
             let new_sender = sender.clone();
             // our "playout budget" for a single move is the total budget split evenly
             // between all the current possible moves
@@ -139,7 +171,7 @@ impl TicTacToeAgent for ForgetfulSearchAgent {
             thread::spawn(move || {
                 let outcomes = theoretical_self.score_move(
                     &mut theoretical_board,
-                    theoretical_player,
+                    theoretical_self.player,
                     row,
                     col,
                     move_budget,
@@ -246,7 +278,7 @@ impl ForgetfulSearchAgent {
         }
 
         // backtrack once we're done calculating
-        if !board.move_history.is_empty() && board.undo_move().is_err() {
+        if board.undo_move().is_err() {
             panic!("ForgetfulSearchAgent tried to do an illegal undo_move() while unwinding simulation");
         }
 
@@ -254,47 +286,38 @@ impl ForgetfulSearchAgent {
     }
 }
 
-#[derive(Clone, Debug)]
-/// Agent that makes random moves.
-pub struct RandomAgent {
-    player: Player,
-}
+/*
+ * -----------------------------
+ * Monte Carlo Tree Search Agent
+ * -----------------------------
+ */
 
-impl TicTacToeAgent for RandomAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
-        Self::get_random_move_choice(board)
-    }
-}
+// From UCT formula, "theoretically equivalent to sqrt(2)" - see
+// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
+const DEFAULT_EXPLORATION_CONSTANT: f64 = f64::consts::SQRT_2;
 
-impl RandomAgent {
-    pub fn new(player: Player) -> RandomAgent {
-        RandomAgent { player }
-    }
-
-    pub fn get_random_move_choice(board: &TicTacToeBoard) -> (usize, usize) {
-        let valid_moves = board.get_valid_moves();
-        let mut rng = thread_rng();
-        *valid_moves.choose(&mut rng).unwrap()
-    }
-}
+// These may need to be tweaked
+const WIN_REWARD: isize = 1;
+const DRAW_REWARD: isize = 0;
+const LOSS_REWARD: isize = -1;
 
 #[derive(Clone, Debug, PartialEq)]
 /// Tree node for the Monte Carlo search tree.
 pub struct TreeNode {
-    // theoretical copy of the actual game board with the move the node represents applied
+    // Theoretical copy of the actual game board with the move the node represents applied.
     board: TicTacToeBoard,
-    // the player that made the most recent move, putting the board in its current state
+    // The player that made the most recent move, putting the board in its current state.
     player: Player,
-    // is this an end state for the game?
+    // Is this an end state for the game?
     is_end_state: bool,
-    // have all child nodes been fully expanded?
+    // Have all child nodes been fully expanded?
     is_fully_expanded: bool,
-    // number of games that have been played out from this node
+    // Number of games that have been played out from this node.
     visits: usize,
-    // total summed score for those games, based on number of wins/losses/draws
+    // Total summed score for those games, based on number of wins/losses/draws.
     score: isize,
-    // mapping of the valid moves from this board state to the child TreeNodes
-    // this should be empty if the node represents an end state
+    // Mapping of the valid moves from this board state to the child TreeNodes. This should be
+    // empty if the node represents an end state.
     children: HashMap<(usize, usize), TreeNode>,
 }
 
@@ -413,7 +436,7 @@ impl TreeNode {
             }
         }
 
-        panic!("Should never be able to reach this");
+        panic!("TreeNode::expand() is broken");
     }
 
     #[allow(dead_code)]
@@ -431,16 +454,20 @@ impl TreeNode {
 
 #[derive(Clone, Debug)]
 /// Monte Carlo tree search agent. Based on:
-/// https://github.com/pbsinclair42/MCTS/blob/master/mcts.py
+/// [pbsinclair42/MCTS](https://github.com/pbsinclair42/MCTS/blob/master/mcts.py)
 pub struct MCTSAgent {
+    // Are we P1 or P2?
     player: Player,
+    // Number of playout iterations we're allowed to simulate for each move choice.
     playout_budget: usize,
+    // Root of the search tree. Will be replaced by one of its descendents upon choosing a move.
     root: TreeNode,
+    // Controls to what extent we should search unexplored vs explored (and well-scored) nodes.
     exploration_constant: f64,
 }
 
 impl<'a> TicTacToeAgent for MCTSAgent {
-    /// Agent chooses the best available move
+    /// Expand the tree for as many iterations as we can, then pick the best move thus far.
     fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
         println!("{:?} MCTSAgent is thinking...", self.player);
         self.search(&board)
@@ -466,7 +493,8 @@ impl MCTSAgent {
         }
     }
 
-    /// Expand the tree for as many iterations as we can, then pick the best move thus far.
+    /// Update our state with the opponent's last move, expand the search tree, then promote the
+    /// best child and return the best move.
     fn search(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
         let maybe_opp_move = self.get_opponents_last_move(&board);
         if let Some(opp_move) = maybe_opp_move {

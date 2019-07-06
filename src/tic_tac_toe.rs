@@ -8,6 +8,7 @@ use Player::{P1, P2};
 
 pub const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
+// Error messages
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
 const NO_MOVE_TO_UNDO: &str = "no move to undo";
@@ -26,7 +27,7 @@ pub enum GameState {
     Ongoing,
 }
 
-/// Used for deciding whose turn it is
+/// Used for deciding whose turn it is. P1 goes first.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Player {
     P1,
@@ -62,12 +63,12 @@ pub struct TicTacToeBoard {
     pub size: usize,
     // for example: 3x3 grid would be a vec of length 9
     pub cells: Vec<Cell>,
-    // the history of the moves played: Player at row, col
-    pub move_history: Vec<(Player, usize, usize)>,
+    // the history of the moves played: (P,(R,C)) means player P made a move at row R, col C
+    pub move_history: Vec<(Player, (usize, usize))>,
 }
 
 impl fmt::Debug for TicTacToeBoard {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let mut board_repr = String::new();
         for cell in self.cells.iter() {
             let cell_repr = match cell {
@@ -78,12 +79,9 @@ impl fmt::Debug for TicTacToeBoard {
             board_repr.push(cell_repr);
         }
         write!(
-            f,
-            "{{ TicTacToeBoard size: {}, cells: [{}], is_p1_turn: {}, history: {:?} }}",
-            self.size,
-            board_repr,
-            self.is_p1_turn(),
-            self.move_history,
+            formatter,
+            "TicTacToeBoard {{\n  size: {},\n  cells: [{}],\n  history: {:?}\n}}",
+            self.size, board_repr, self.move_history,
         )
     }
 }
@@ -131,11 +129,11 @@ impl TicTacToeBoard {
         println!("\n");
     }
 
+    /// Does P1 get to make the next move?
     pub fn is_p1_turn(&self) -> bool {
         match self.move_history.last() {
-            None => true,
-            Some(&(P2, _, _)) => true,
-            Some(&(P1, _, _)) => false,
+            None | Some(&(P2, _)) => true,
+            Some(&(P1, _)) => false,
         }
     }
 
@@ -143,12 +141,12 @@ impl TicTacToeBoard {
     /// end state. Enables more efficient search b/c we don't need to create copies of the board.
     pub fn undo_move(&mut self) -> Result<(), &str> {
         match self.move_history.pop() {
-            None => return Err(NO_MOVE_TO_UNDO),
-            Some((_, r, c)) => {
+            Some((_, (r, c))) => {
                 self.cells[r * self.size + c] = Empty;
+                Ok(())
             }
+            None => Err(NO_MOVE_TO_UNDO),
         }
-        Ok(())
     }
 
     /// Return a vector of (row, col) legal moves the player can choose.
@@ -177,7 +175,7 @@ impl TicTacToeBoard {
             Empty => self.cells[idx] = Full(player),
             _ => return Err(CELL_TAKEN),
         }
-        self.move_history.push((player, row, col));
+        self.move_history.push((player, (row, col)));
 
         if self.move_wins_game(row, col, player) {
             return Ok(Ended(Winner(player)));
