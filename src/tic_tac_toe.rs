@@ -293,13 +293,26 @@ fn test_enter_move() {
 fn test_undo_move() {
     let size = 3;
     let mut board = TicTacToeBoard::new(size);
-    assert!(board.is_p1_turn());
+    // draw game
     assert!(Ok(Ongoing) == board.enter_move(1, 1, P1));
     assert!(Ok(Ongoing) == board.enter_move(1, 2, P2));
-    assert!(board.move_history.len() == 2);
+    assert!(Ok(Ongoing) == board.enter_move(1, 0, P1));
+    assert!(Ok(Ongoing) == board.enter_move(0, 2, P2));
+    assert!(Ok(Ongoing) == board.enter_move(2, 2, P1));
+    assert!(Ok(Ongoing) == board.enter_move(0, 1, P1));
+    assert!(Ok(Ongoing) == board.enter_move(0, 0, P2));
+    assert!(Ok(Ongoing) == board.enter_move(2, 0, P1));
+    assert!(Ok(Ended(Draw)) == board.enter_move(2, 1, P2));
+    assert!(board.move_history.len() == 9);
+    // undo last two moves and make P1 win
     assert!(Ok(()) == board.undo_move());
     assert!(!board.is_p1_turn());
     assert!(Ok(()) == board.undo_move());
     assert!(board.is_p1_turn());
+    assert!(Ok(Ended(Winner(P1))) == board.enter_move(2, 1, P1));
+    for _ in 0..8 {
+        assert!(Ok(()) == board.undo_move());
+    }
     assert!(board.move_history.is_empty());
+    assert!(Err(NO_MOVE_TO_UNDO) == board.undo_move());
 }
