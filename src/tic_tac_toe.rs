@@ -10,6 +10,7 @@ pub const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 
 const OUT_OF_RANGE: &str = "out of range";
 const CELL_TAKEN: &str = "cell taken";
+const NO_MOVE_TO_UNDO: &str = "no move to undo";
 
 /// Did the game end in a draw or was there a winner?
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -61,8 +62,8 @@ pub struct TicTacToeBoard {
     pub size: usize,
     // for example: 3x3 grid would be a vec of length 9
     pub cells: Vec<Cell>,
-    // who gets to make the next move?
-    pub is_p1_turn: bool,
+    // the history of the moves played: Player at row, col
+    pub move_history: Vec<(Player, usize, usize)>,
 }
 
 impl fmt::Debug for TicTacToeBoard {
@@ -78,8 +79,11 @@ impl fmt::Debug for TicTacToeBoard {
         }
         write!(
             f,
-            "{{ TicTacToeBoard size: {}, cells: [{}], is_p1_turn: {} }}",
-            self.size, board_repr, self.is_p1_turn
+            "{{ TicTacToeBoard size: {}, cells: [{}], is_p1_turn: {}, history: {:?} }}",
+            self.size,
+            board_repr,
+            self.is_p1_turn(),
+            self.move_history,
         )
     }
 }
@@ -92,7 +96,7 @@ impl TicTacToeBoard {
         TicTacToeBoard {
             cells: vec![Empty; (size * size) as usize],
             size,
-            is_p1_turn: true,
+            move_history: vec![],
         }
     }
 
@@ -127,10 +131,24 @@ impl TicTacToeBoard {
         println!("\n");
     }
 
+    pub fn is_p1_turn(&self) -> bool {
+        match self.move_history.last() {
+            None => true,
+            Some(&(P2, _, _)) => true,
+            Some(&(P1, _, _)) => false,
+        }
+    }
+
     /// Used in the theoretical playouts that tree search agents use to backtrack after reaching an
     /// end state. Enables more efficient search b/c we don't need to create copies of the board.
-    pub fn undo_move(&mut self, r: usize, c: usize) {
-        self.cells[r * self.size + c] = Empty;
+    pub fn undo_move(&mut self) -> Result<(), &str> {
+        match self.move_history.pop() {
+            None => return Err(NO_MOVE_TO_UNDO),
+            Some((_, r, c)) => {
+                self.cells[r * self.size + c] = Empty;
+            }
+        }
+        Ok(())
     }
 
     /// Return a vector of (row, col) legal moves the player can choose.
@@ -151,14 +169,15 @@ impl TicTacToeBoard {
         col: usize,
         player: Player,
     ) -> Result<GameState, &str> {
-        let idx = row * self.size + col;
-        if idx > self.size * self.size - 1 {
+        if row >= self.size || col >= self.size {
             return Err(OUT_OF_RANGE);
         }
+        let idx = row * self.size + col;
         match &self.cells[idx] {
             Empty => self.cells[idx] = Full(player),
             _ => return Err(CELL_TAKEN),
         }
+        self.move_history.push((player, row, col));
 
         if self.move_wins_game(row, col, player) {
             return Ok(Ended(Winner(player)));
@@ -167,8 +186,6 @@ impl TicTacToeBoard {
         if self.get_valid_moves().is_empty() {
             return Ok(Ended(Draw));
         }
-
-        self.is_p1_turn = !self.is_p1_turn;
 
         Ok(Ongoing)
     }
@@ -221,34 +238,68 @@ impl TicTacToeBoard {
 
 #[test]
 fn test_player_fills_line() {
+    let size = 3;
     // row
-    let mut board = TicTacToeBoard::new(3);
-    for i in 0..3 {
+    let mut board = TicTacToeBoard::new(size);
+    for i in 0..size {
         board.cells[i * board.size] = Full(P1);
     }
     assert!(board.player_fills_line(P1, &|i| i % board.size == 0));
 
     // col
-    let mut board = TicTacToeBoard::new(3);
-    for i in 0..3 {
+    let mut board = TicTacToeBoard::new(size);
+    for i in 0..size {
         board.cells[i] = Full(P1);
     }
     assert!(board.player_fills_line(P1, &|i| i / board.size == 0));
 
     // diag \
-    let mut board = TicTacToeBoard::new(3);
-    for i in 0..3 {
+    let mut board = TicTacToeBoard::new(size);
+    for i in 0..size {
         board.cells[i * board.size + i] = Full(P1);
     }
     assert!(board.player_fills_line(P1, &|i| i % board.size == i / board.size));
 
     // diag /
-    let mut board = TicTacToeBoard::new(3);
-    for i in 0..3 {
+    let mut board = TicTacToeBoard::new(size);
+    for i in 0..size {
         board.cells[board.size + i * board.size - i - 1] = Full(P1);
     }
     assert!(
         board.player_fills_line(P1, &|i| (i % board.size) + (i / board.size)
             == board.size - 1)
     );
+}
+
+#[test]
+fn test_enter_move() {
+    let size = 3;
+    let mut board = TicTacToeBoard::new(size);
+    assert!(board.is_p1_turn());
+    assert!(board.get_valid_moves().len() == size * size);
+
+    assert!(Ok(Ongoing) == board.enter_move(1, 1, P1));
+    assert!(!board.is_p1_turn());
+    assert!(board.get_valid_moves().len() == size * size - 1);
+
+    assert!(Ok(Ongoing) == board.enter_move(1, 2, P2));
+    assert!(board.is_p1_turn());
+    assert!(board.get_valid_moves().len() == size * size - 2);
+    assert!(Err(CELL_TAKEN) == board.enter_move(1, 2, P1));
+    assert!(Err(OUT_OF_RANGE) == board.enter_move(1, 3, P1));
+}
+
+#[test]
+fn test_undo_move() {
+    let size = 3;
+    let mut board = TicTacToeBoard::new(size);
+    assert!(board.is_p1_turn());
+    assert!(Ok(Ongoing) == board.enter_move(1, 1, P1));
+    assert!(Ok(Ongoing) == board.enter_move(1, 2, P2));
+    assert!(board.move_history.len() == 2);
+    assert!(Ok(()) == board.undo_move());
+    assert!(!board.is_p1_turn());
+    assert!(Ok(()) == board.undo_move());
+    assert!(board.is_p1_turn());
+    assert!(board.move_history.is_empty());
 }

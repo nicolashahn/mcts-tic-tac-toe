@@ -17,7 +17,7 @@ pub fn play(
     board.display();
 
     loop {
-        let player = match board.is_p1_turn {
+        let player = match board.is_p1_turn() {
             true => P1,
             false => P2,
         };

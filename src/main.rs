@@ -6,10 +6,10 @@ use agents::{ForgetfulSearchAgent, HumanAgent, MCTSAgent};
 use mcts::{agents, play, tic_tac_toe};
 use tic_tac_toe::{Player, TicTacToeBoard};
 
-const BOARD_SIZE: usize = 3;
+const BOARD_SIZE: usize = 5;
 // number of random games to play out from a given game state
 // stop after we reach or exceed this number
-const PLAYOUT_BUDGET: usize = 50000;
+const PLAYOUT_BUDGET: usize = 1000000;
 
 // TODO add command line flags to control board size, player agent types, playout budget
 fn main() -> io::Result<()> {

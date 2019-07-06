@@ -204,7 +204,9 @@ impl ForgetfulSearchAgent {
         // play the move in question on the theoretical board
         if let Ok(Ended(endstate)) = board.enter_move(row, col, player) {
             // backtrack once we're done calculating
-            board.undo_move(row, col);
+            if board.undo_move().is_err() {
+                panic!("ForgetfulSearchAgent tried to do an illegal undo_move() at game end, board: {:?}", board);
+            }
 
             // the score (num cells remaining)^2 + 1 weights outcomes that are closer in the search
             // space to the current move higher
@@ -244,7 +246,9 @@ impl ForgetfulSearchAgent {
         }
 
         // backtrack once we're done calculating
-        board.undo_move(row, col);
+        if !board.move_history.is_empty() && board.undo_move().is_err() {
+            panic!("ForgetfulSearchAgent tried to do an illegal undo_move() while unwinding simulation");
+        }
 
         outcomes
     }
