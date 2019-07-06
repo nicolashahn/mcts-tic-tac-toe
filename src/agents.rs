@@ -82,8 +82,8 @@ impl HumanAgent {
         if io::stdin().read_line(&mut input).is_err() {
             return Err(BAD_INPUT);
         }
-        // at least 2 indices + \n
-        if input.len() < 3 {
+        // 2 indices (row, col) + \n
+        if input.len() != 3 {
             return Err(BAD_INPUT);
         }
         let player_move = input.trim();
