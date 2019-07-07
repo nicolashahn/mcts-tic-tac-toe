@@ -496,19 +496,35 @@ impl MCTSAgent {
     /// Update our state with the opponent's last move, expand the search tree, then promote the
     /// best child and return the best move.
     fn search(&mut self, board: &TicTacToeBoard) -> (usize, usize) {
+        let now = Instant::now();
         let maybe_opp_move = self.get_opponents_last_move(&board);
         if let Some(opp_move) = maybe_opp_move {
             self.update_with_opponents_move(opp_move, &board);
         }
         // TODO multithread
+        let mut total_playouts: u64 = 0;
         for _ in 0..self.playout_budget {
             if self.root.is_fully_expanded {
                 break;
             }
             let _ = self.root.expand();
+            total_playouts += 1;
         }
 
-        self.get_best_move_and_promote_child()
+        let best_move = self.get_best_move_and_promote_child();
+        println!(
+            "
+Chosen move:      {:?}
+Total playouts:   {}
+Choosing took:    {:?}
+Playout rate:     {:.2}/sec",
+            best_move,
+            total_playouts,
+            now.elapsed(),
+            (total_playouts as f64 / (now.elapsed().as_nanos() as f64)) * 1_000_000_000.0
+        );
+
+        best_move
     }
 
     /// Get the last move of the opponent, if we're not making the first move on the board.
@@ -542,7 +558,7 @@ impl MCTSAgent {
         let mut best_moves: Vec<(usize, usize)> = vec![];
         for (&move_, child) in self.root.children.iter() {
             let node_val = child.score as f64 / child.visits as f64;
-            println!("{:?} score: {}", child.board, node_val);
+            println!("Evaluating move {:?}, score: {}", move_, node_val);
             if node_val > best_val {
                 best_val = node_val;
                 best_moves = vec![move_];
