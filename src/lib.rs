@@ -1,11 +1,11 @@
 use std::io;
 pub mod agents;
-pub mod tic_tac_toe;
+pub mod board_games;
 
-use tic_tac_toe::EndState::{Draw, Winner};
-use tic_tac_toe::GameState::{Ended, Ongoing};
-use tic_tac_toe::Player::{P1, P2};
-use tic_tac_toe::{GameBoard, TicTacToeAgent, TicTacToeBoard};
+use board_games::EndState::{Draw, Winner};
+use board_games::GameState::{Ended, Ongoing};
+use board_games::Player::{P1, P2};
+use board_games::{GameBoard, TicTacToeAgent, TicTacToeBoard};
 
 /// Two agents (human or AI) play against each other.
 pub fn play(

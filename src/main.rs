@@ -3,8 +3,8 @@ use std::io;
 
 #[allow(unused_imports)]
 use agents::{ForgetfulSearchAgent, HumanAgent, MCTSAgent};
-use mcts::{agents, play, tic_tac_toe};
-use tic_tac_toe::{Player, TicTacToeBoard};
+use board_games::{Player, TicTacToeBoard};
+use mcts::{agents, board_games, play};
 
 const BOARD_SIZE: usize = 5;
 // number of random games to play out from a given game state
