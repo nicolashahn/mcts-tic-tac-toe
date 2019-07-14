@@ -82,8 +82,9 @@ P2 MCTSAgent is thinking...
     - Optionally, a heuristic function that will tell the agent which moves it should
       explore first
   - Other games to target:
-    - Chess
     - [Ty Overby](https://github.com/TyOverby)'s "Four-not-three" hex grid game
+    - [Omok(Gomoku)](https://en.wikipedia.org/wiki/Gomoku)
+    - Chess - mainly to pit it against the multitude of other AIs
     - Something not 2D-grid based?
 - Match recordings
   - Write during a match to a file, replay in UI through a pair of `RecordedAgent`s
