@@ -15,7 +15,7 @@ const PLAYOUT_BUDGET: usize = 250_000;
 fn main() -> io::Result<()> {
     let mut board = TicTacToeBoard::new(BOARD_SIZE);
 
-    let mut agent1 = HumanAgent::default();
+    let mut agent1 = HumanAgent::new(Player::P1);
     // To see two AI agents duel each other:
     //let mut agent1 = ForgetfulSearchAgent::new(Player::P1, 2_000_000);
     //let mut agent1 = MCTSAgent::new(Player::P1, PLAYOUT_BUDGET, board.clone());

@@ -5,7 +5,7 @@ pub mod tic_tac_toe;
 use tic_tac_toe::EndState::{Draw, Winner};
 use tic_tac_toe::GameState::{Ended, Ongoing};
 use tic_tac_toe::Player::{P1, P2};
-use tic_tac_toe::{TicTacToeAgent, TicTacToeBoard};
+use tic_tac_toe::{GameBoard, TicTacToeAgent, TicTacToeBoard};
 
 /// Two agents (human or AI) play against each other.
 pub fn play(
@@ -21,13 +21,12 @@ pub fn play(
             true => P1,
             false => P2,
         };
-        let rc = match player {
+        let move_ = match player {
             P1 => agent1.choose_move(&board),
             P2 => agent2.choose_move(&board),
         };
 
-        let (row, col) = rc;
-        match board.enter_move(row, col, player) {
+        match board.enter_move(move_) {
             Ok(Ended(endstate)) => {
                 board.display();
                 match endstate {

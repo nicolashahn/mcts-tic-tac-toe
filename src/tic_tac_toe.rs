@@ -28,7 +28,7 @@ pub enum GameState {
 }
 
 /// Used for deciding whose turn it is. P1 goes first.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Eq, Hash, Clone, Copy, Debug, PartialEq)]
 pub enum Player {
     P1,
     P2,
@@ -43,10 +43,31 @@ impl Player {
     }
 }
 
+/// Functionality associated with any board-game-like object.
+pub trait GameBoard {
+    /// The information required to enter a move onto the game board.
+    type GameMove;
+
+    /// Enter a move onto the board.
+    fn enter_move(&mut self, move_: Self::GameMove) -> Result<GameState, &str>;
+
+    /// Get all the valid moves that are allowed at the board's current state.
+    fn get_valid_moves(&self) -> Vec<Self::GameMove>;
+
+    /// Is it the first player's turn to move?.
+    fn is_p1_turn(&self) -> bool;
+
+    /// Print a representation of the board to STDOUT.
+    fn display(&self);
+
+    /// Undo the last move that was made (for backtracking in tree search).
+    fn undo_move(&mut self) -> Result<(), &str>;
+}
+
 /// An agent that can choose a move from a tic-tac-toe board. Self is mutable because AI agents
 /// may need to update their state as they search for moves.
 pub trait TicTacToeAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> (usize, usize);
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> TicTacToeMove;
 }
 
 /// Represents a single cell of the tic-tac-toe board.
@@ -86,17 +107,12 @@ impl fmt::Debug for TicTacToeBoard {
     }
 }
 
-// TODO make generic GameBoard trait so agents can be used with other board games
-/// Representation of an N-dimensional tic-tac-toe board
-impl TicTacToeBoard {
-    /// Return a new Board of (size * size) cells.
-    pub fn new(size: usize) -> TicTacToeBoard {
-        TicTacToeBoard {
-            cells: vec![Empty; (size * size) as usize],
-            size,
-            move_history: vec![],
-        }
-    }
+/// The information needed to enter a move to the tic tac toe board.
+/// (row, col, player)
+pub type TicTacToeMove = (usize, usize, Player);
+
+impl GameBoard for TicTacToeBoard {
+    type GameMove = TicTacToeMove;
 
     /// Print the board to stdout with the column and row labels:
     ///
@@ -106,7 +122,7 @@ impl TicTacToeBoard {
     /// 2 ...
     ///
     /// NOTE: this will fail with self.size > 10, need to implement smarter indexing
-    pub fn display(&self) {
+    fn display(&self) {
         if self.size > 10 {
             println!("The board is too large to print with indices");
             return;
@@ -130,7 +146,7 @@ impl TicTacToeBoard {
     }
 
     /// Does P1 get to make the next move?
-    pub fn is_p1_turn(&self) -> bool {
+    fn is_p1_turn(&self) -> bool {
         match self.move_history.last() {
             None | Some(&(P2, _)) => true,
             Some(&(P1, _)) => false,
@@ -139,7 +155,7 @@ impl TicTacToeBoard {
 
     /// Used in the theoretical playouts that tree search agents use to backtrack after reaching an
     /// end state. Enables more efficient search b/c we don't need to create copies of the board.
-    pub fn undo_move(&mut self) -> Result<(), &str> {
+    fn undo_move(&mut self) -> Result<(), &str> {
         match self.move_history.pop() {
             Some((_, (r, c))) => {
                 self.cells[r * self.size + c] = Empty;
@@ -150,23 +166,24 @@ impl TicTacToeBoard {
     }
 
     /// Return a vector of (row, col) legal moves the player can choose.
-    pub fn get_valid_moves(&self) -> Vec<(usize, usize)> {
+    fn get_valid_moves(&self) -> Vec<TicTacToeMove> {
         let mut valid_moves = Vec::new();
         for (i, cell) in self.cells.iter().enumerate() {
             if let Empty = cell {
-                valid_moves.push((i / self.size, i % self.size));
+                let player = match self.is_p1_turn() {
+                    true => P1,
+                    false => P2,
+                };
+                valid_moves.push((i / self.size, i % self.size, player));
             }
         }
         valid_moves
     }
 
     /// Return Ok(Ended(_) if game is over, Ok(Ongoing) if it continues, Err if invalid move.
-    pub fn enter_move(
-        &mut self,
-        row: usize,
-        col: usize,
-        player: Player,
-    ) -> Result<GameState, &str> {
+    fn enter_move(&mut self, move_: TicTacToeMove) -> Result<GameState, &str> {
+        let (row, col, player) = move_;
+
         if row >= self.size || col >= self.size {
             return Err(OUT_OF_RANGE);
         }
@@ -187,7 +204,18 @@ impl TicTacToeBoard {
 
         Ok(Ongoing)
     }
+}
 
+/// Representation of an N-dimensional tic-tac-toe board.
+impl TicTacToeBoard {
+    /// Return a new Board of (size * size) cells.
+    pub fn new(size: usize) -> TicTacToeBoard {
+        TicTacToeBoard {
+            cells: vec![Empty; (size * size) as usize],
+            size,
+            move_history: vec![],
+        }
+    }
     /// Return if the line defined by the filter_fn is filled with cells of type player.
     fn player_fills_line(&self, player: Player, filter_fn: &Fn(usize) -> bool) -> bool {
         let mut player_count = 0;
@@ -276,15 +304,15 @@ fn test_enter_move() {
     assert!(board.is_p1_turn());
     assert!(board.get_valid_moves().len() == size * size);
 
-    assert!(Ok(Ongoing) == board.enter_move(1, 1, P1));
+    assert!(Ok(Ongoing) == board.enter_move((1, 1, P1)));
     assert!(!board.is_p1_turn());
     assert!(board.get_valid_moves().len() == size * size - 1);
 
-    assert!(Ok(Ongoing) == board.enter_move(1, 2, P2));
+    assert!(Ok(Ongoing) == board.enter_move((1, 2, P2)));
     assert!(board.is_p1_turn());
     assert!(board.get_valid_moves().len() == size * size - 2);
-    assert!(Err(CELL_TAKEN) == board.enter_move(1, 2, P1));
-    assert!(Err(OUT_OF_RANGE) == board.enter_move(1, 3, P1));
+    assert!(Err(CELL_TAKEN) == board.enter_move((1, 2, P1)));
+    assert!(Err(OUT_OF_RANGE) == board.enter_move((1, 3, P1)));
 }
 
 #[test]
@@ -292,22 +320,22 @@ fn test_undo_move() {
     let size = 3;
     let mut board = TicTacToeBoard::new(size);
     // draw game
-    assert!(Ok(Ongoing) == board.enter_move(1, 1, P1));
-    assert!(Ok(Ongoing) == board.enter_move(1, 2, P2));
-    assert!(Ok(Ongoing) == board.enter_move(1, 0, P1));
-    assert!(Ok(Ongoing) == board.enter_move(0, 2, P2));
-    assert!(Ok(Ongoing) == board.enter_move(2, 2, P1));
-    assert!(Ok(Ongoing) == board.enter_move(0, 1, P1));
-    assert!(Ok(Ongoing) == board.enter_move(0, 0, P2));
-    assert!(Ok(Ongoing) == board.enter_move(2, 0, P1));
-    assert!(Ok(Ended(Draw)) == board.enter_move(2, 1, P2));
+    assert!(Ok(Ongoing) == board.enter_move((1, 1, P1)));
+    assert!(Ok(Ongoing) == board.enter_move((1, 2, P2)));
+    assert!(Ok(Ongoing) == board.enter_move((1, 0, P1)));
+    assert!(Ok(Ongoing) == board.enter_move((0, 2, P2)));
+    assert!(Ok(Ongoing) == board.enter_move((2, 2, P1)));
+    assert!(Ok(Ongoing) == board.enter_move((0, 1, P1)));
+    assert!(Ok(Ongoing) == board.enter_move((0, 0, P2)));
+    assert!(Ok(Ongoing) == board.enter_move((2, 0, P1)));
+    assert!(Ok(Ended(Draw)) == board.enter_move((2, 1, P2)));
     assert!(board.move_history.len() == 9);
     // undo last two moves and make P1 win
     assert!(Ok(()) == board.undo_move());
     assert!(!board.is_p1_turn());
     assert!(Ok(()) == board.undo_move());
     assert!(board.is_p1_turn());
-    assert!(Ok(Ended(Winner(P1))) == board.enter_move(2, 1, P1));
+    assert!(Ok(Ended(Winner(P1))) == board.enter_move((2, 1, P1)));
     for _ in 0..8 {
         assert!(Ok(()) == board.undo_move());
     }
