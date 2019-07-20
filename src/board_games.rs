@@ -44,15 +44,14 @@ impl Player {
 }
 
 /// Functionality associated with any board-game-like object.
-pub trait GameBoard {
+pub trait GameBoard<GameMove>: Clone {
     /// The information required to enter a move onto the game board.
-    type GameMove;
 
     /// Enter a move onto the board.
-    fn enter_move(&mut self, move_: Self::GameMove) -> Result<GameState, &str>;
+    fn enter_move(&mut self, move_: GameMove) -> Result<GameState, &str>;
 
     /// Get all the valid moves that are allowed at the board's current state.
-    fn get_valid_moves(&self) -> Vec<Self::GameMove>;
+    fn get_valid_moves(&self) -> Vec<GameMove>;
 
     /// Is it the first player's turn to move?.
     fn is_p1_turn(&self) -> bool;
@@ -68,6 +67,10 @@ pub trait GameBoard {
 /// may need to update their state as they search for moves.
 pub trait TicTacToeAgent {
     fn choose_move(&mut self, board: &TicTacToeBoard) -> TicTacToeMove;
+}
+
+pub trait BoardGameAgent<GM> {
+    fn choose_move(&mut self, board: &impl GameBoard<GM>) -> GM;
 }
 
 /// Represents a single cell of the tic-tac-toe board.
@@ -111,9 +114,7 @@ impl fmt::Debug for TicTacToeBoard {
 /// (row, col, player)
 pub type TicTacToeMove = (usize, usize, Player);
 
-impl GameBoard for TicTacToeBoard {
-    type GameMove = TicTacToeMove;
-
+impl GameBoard<TicTacToeMove> for TicTacToeBoard {
     /// Print the board to stdout with the column and row labels:
     ///
     ///   abc

@@ -18,7 +18,8 @@ use board_games::EndState::{Draw, Winner};
 use board_games::GameState::{Ended, Ongoing};
 use board_games::Player::{P1, P2};
 use board_games::{
-    EndState, GameBoard, Player, TicTacToeAgent, TicTacToeBoard, TicTacToeMove, ALPHABET,
+    BoardGameAgent, EndState, GameBoard, Player, TicTacToeAgent, TicTacToeBoard, TicTacToeMove,
+    ALPHABET,
 };
 
 /*
@@ -36,6 +37,20 @@ pub struct HumanAgent {
 
 impl TicTacToeAgent for HumanAgent {
     fn choose_move(&mut self, _board: &TicTacToeBoard) -> TicTacToeMove {
+        loop {
+            println!("Enter a move (like \"a0\"):");
+            match self.get_move() {
+                Ok((row, col)) => return (row, col, self.player),
+                Err(_) => {
+                    println!("Oops, enter valid input");
+                }
+            };
+        }
+    }
+}
+
+impl BoardGameAgent<TicTacToeMove> for HumanAgent {
+    fn choose_move(&mut self, _board: &impl GameBoard<TicTacToeMove>) -> TicTacToeMove {
         loop {
             println!("Enter a move (like \"a0\"):");
             match self.get_move() {
@@ -99,15 +114,21 @@ impl TicTacToeAgent for RandomAgent {
     }
 }
 
+impl BoardGameAgent<TicTacToeMove> for RandomAgent {
+    fn choose_move(&mut self, board: &impl GameBoard<TicTacToeMove>) -> TicTacToeMove {
+        Self::get_random_move_choice(board)
+    }
+}
+
 impl RandomAgent {
     pub fn new(player: Player) -> RandomAgent {
         RandomAgent { player }
     }
 
-    pub fn get_random_move_choice(board: &TicTacToeBoard) -> TicTacToeMove {
+    pub fn get_random_move_choice<GM: Clone>(board: &impl GameBoard<GM>) -> GM {
         let valid_moves = board.get_valid_moves();
         let mut rng = thread_rng();
-        *valid_moves.choose(&mut rng).unwrap()
+        (*valid_moves.choose(&mut rng).unwrap()).clone()
     }
 }
 
@@ -363,10 +384,14 @@ impl TreeNode {
     }
 
     /// Play out a game randomly from this node and return the score.
-    fn simulate_random_playout(theoretical_board: &mut TicTacToeBoard, player: Player) -> EndState {
+    fn simulate_random_playout(
+        theoretical_board: &mut impl GameBoard<TicTacToeMove>,
+        player: Player,
+    ) -> EndState {
         let mut curr_player = player.get_opponent();
         loop {
-            let move_ = RandomAgent::get_random_move_choice(&theoretical_board);
+            //let move_ = RandomAgent::get_random_move_choice(&theoretical_board);
+            let move_ = theoretical_board.get_valid_moves()[0];
             let game_state = theoretical_board.enter_move(move_);
             curr_player = curr_player.get_opponent();
             match game_state {
