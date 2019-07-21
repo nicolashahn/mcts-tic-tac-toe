@@ -79,10 +79,15 @@ pub trait GameBoard<GameMove>:
     fn move_history(&self) -> Vec<GameMove>;
 }
 
-pub trait BoardGameAgent<GM, GB>
-where
-    GM: GameMove,
-    GB: GameBoard<GM>,
-{
-    fn choose_move(&mut self, board: &GB) -> GM;
+/// Basic game move for any game that just allows player to lay down pieces on a grid.
+/// (row, col, player)
+pub type RowColPlayer = (usize, usize, Player);
+
+impl GameMove for RowColPlayer {
+    fn player(&self) -> Player {
+        self.2
+    }
+    fn set_player(&mut self, p: Player) {
+        self.2 = p;
+    }
 }

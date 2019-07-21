@@ -18,8 +18,8 @@ use crate::tictactoe;
 use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
-use board_game::{BoardGameAgent, EndState, GameBoard, GameMove, Player, ALPHABET};
-use tictactoe::{TicTacToeBoard, TicTacToeMove};
+use board_game::{EndState, GameBoard, GameMove, Player, RowColPlayer, ALPHABET};
+use tictactoe::TicTacToeBoard;
 
 /*
  * -----------
@@ -29,13 +29,22 @@ use tictactoe::{TicTacToeBoard, TicTacToeMove};
 
 const BAD_INPUT: &str = "bad input";
 
+/// An agent that will choose a valid move given the state of the game board.
+pub trait BoardGameAgent<GM, GB>
+where
+    GM: GameMove,
+    GB: GameBoard<GM>,
+{
+    fn choose_move(&mut self, board: &GB) -> GM;
+}
+
 /// An agent controlled by the user running the program.
 pub struct HumanAgent {
     pub player: Player,
 }
 
-impl BoardGameAgent<TicTacToeMove, TicTacToeBoard> for HumanAgent {
-    fn choose_move(&mut self, _board: &TicTacToeBoard) -> TicTacToeMove {
+impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for HumanAgent {
+    fn choose_move(&mut self, _board: &TicTacToeBoard) -> RowColPlayer {
         loop {
             println!("Enter a move (like \"a0\"):");
             match self.get_move() {
@@ -93,8 +102,8 @@ pub struct RandomAgent {
     player: Player,
 }
 
-impl BoardGameAgent<TicTacToeMove, TicTacToeBoard> for RandomAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> TicTacToeMove {
+impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for RandomAgent {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> RowColPlayer {
         Self::get_random_move_choice(board)
     }
 }
@@ -151,8 +160,8 @@ pub struct ForgetfulSearchAgent {
     playout_budget: usize,
 }
 
-impl BoardGameAgent<TicTacToeMove, TicTacToeBoard> for ForgetfulSearchAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> TicTacToeMove {
+impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for ForgetfulSearchAgent {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> RowColPlayer {
         let theoretical_board = board.clone();
         self._choose_move(&theoretical_board)
     }
@@ -180,7 +189,7 @@ impl ForgetfulSearchAgent {
         let (sender, receiver) = mpsc::channel();
 
         let now = Instant::now();
-        for move_ in valid_moves {
+        for mut move_ in valid_moves {
             // need a mutable copy here so we can use recursive backtracking without needing to make
             // a copy of the board at each step
             let mut theoretical_board = board.clone();
@@ -189,13 +198,9 @@ impl ForgetfulSearchAgent {
             // our "playout budget" for a single move is the total budget split evenly
             // between all the current possible moves
             let move_budget = self.playout_budget / num_moves;
-            let mut theoretical_move = move_.clone();
             thread::spawn(move || {
-                let outcomes = theoretical_self.score_move(
-                    &mut theoretical_board,
-                    &mut theoretical_move,
-                    move_budget,
-                );
+                let outcomes =
+                    theoretical_self.score_move(&mut theoretical_board, &mut move_, move_budget);
                 new_sender.send((outcomes, move_)).unwrap();
             });
         }
@@ -494,8 +499,8 @@ where
     exploration_constant: f64,
 }
 
-impl BoardGameAgent<TicTacToeMove, TicTacToeBoard> for MCTSAgent<TicTacToeMove, TicTacToeBoard> {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> TicTacToeMove {
+impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for MCTSAgent<RowColPlayer, TicTacToeBoard> {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> RowColPlayer {
         let theoretical_board = board.clone();
         self.search(&theoretical_board)
     }

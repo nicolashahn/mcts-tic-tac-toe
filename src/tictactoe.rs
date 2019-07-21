@@ -8,7 +8,7 @@ use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
 use board_game::{
-    Cell, GameBoard, GameMove, GameState, Player, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
+    Cell, GameBoard, GameState, Player, RowColPlayer, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
     OUT_OF_RANGE,
 };
 
@@ -19,8 +19,8 @@ pub struct TicTacToeBoard {
     pub size: usize,
     // for example: 3x3 grid would be a vec of length 9
     pub cells: Vec<Cell>,
-    // the history of the moves played: (P,(R,C)) means player P made a move at row R, col C
-    pub move_history: Vec<TicTacToeMove>,
+    // the history of the moves played: (R,C,P) means player P made a move at row R, col C
+    pub move_history: Vec<RowColPlayer>,
 }
 
 impl fmt::Debug for TicTacToeBoard {
@@ -42,20 +42,7 @@ impl fmt::Debug for TicTacToeBoard {
     }
 }
 
-/// The information needed to enter a move to the tic tac toe board.
-/// (row, col, player)
-pub type TicTacToeMove = (usize, usize, Player);
-
-impl GameMove for TicTacToeMove {
-    fn player(&self) -> Player {
-        self.2
-    }
-    fn set_player(&mut self, p: Player) {
-        self.2 = p;
-    }
-}
-
-impl GameBoard<TicTacToeMove> for TicTacToeBoard {
+impl GameBoard<RowColPlayer> for TicTacToeBoard {
     /// Print the board to stdout with the column and row labels:
     ///
     ///   abc
@@ -109,7 +96,7 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
 
     /// Return a vector of (row, col) legal moves the player can choose.
     #[allow(clippy::match_bool)]
-    fn get_valid_moves(&self) -> Vec<TicTacToeMove> {
+    fn get_valid_moves(&self) -> Vec<RowColPlayer> {
         let mut valid_moves = Vec::new();
         for (i, cell) in self.cells.iter().enumerate() {
             if let Empty = cell {
@@ -124,7 +111,7 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
     }
 
     /// Return Ok(Ended(_) if game is over, Ok(Ongoing) if it continues, Err if invalid move.
-    fn enter_move(&mut self, move_: TicTacToeMove) -> Result<GameState, &str> {
+    fn enter_move(&mut self, move_: RowColPlayer) -> Result<GameState, &str> {
         let (row, col, player) = move_;
 
         if row >= self.size || col >= self.size {
@@ -148,7 +135,7 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
         Ok(Ongoing)
     }
 
-    fn move_history(&self) -> Vec<TicTacToeMove> {
+    fn move_history(&self) -> Vec<RowColPlayer> {
         self.move_history.clone()
     }
 }

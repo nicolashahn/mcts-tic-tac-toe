@@ -3,10 +3,11 @@ pub mod agents;
 pub mod board_game;
 pub mod tictactoe;
 
+use agents::BoardGameAgent;
 use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
-use board_game::{BoardGameAgent, GameBoard, GameMove};
+use board_game::{GameBoard, GameMove};
 
 /// Two agents (human or AI) play against each other.
 #[allow(clippy::match_bool)]
