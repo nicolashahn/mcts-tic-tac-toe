@@ -18,8 +18,8 @@ use board_games::EndState::{Draw, Winner};
 use board_games::GameState::{Ended, Ongoing};
 use board_games::Player::{P1, P2};
 use board_games::{
-    BoardGameAgent, EndState, GameBoard, Player, TicTacToeAgent, TicTacToeBoard, TicTacToeMove,
-    ALPHABET,
+    BoardGameAgent, EndState, GameBoard, GameMove, Player, TicTacToeAgent, TicTacToeBoard,
+    TicTacToeMove, ALPHABET,
 };
 
 /*
@@ -173,22 +173,42 @@ pub struct ForgetfulSearchAgent {
 }
 
 impl TicTacToeAgent for ForgetfulSearchAgent {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> TicTacToeMove {
+        let theoretical_board = board.clone();
+        self._choose_move(&theoretical_board)
+    }
+}
+
+impl BoardGameAgent<TicTacToeMove> for ForgetfulSearchAgent {
+    fn choose_move(&mut self, board: &impl GameBoard<TicTacToeMove>) -> TicTacToeMove {
+        let theoretical_board = board.clone();
+        self._choose_move(&theoretical_board)
+    }
+}
+
+impl ForgetfulSearchAgent {
+    pub fn new(player: Player, playout_budget: usize) -> ForgetfulSearchAgent {
+        ForgetfulSearchAgent {
+            player,
+            playout_budget,
+        }
+    }
+
     /// Agent chooses the best available move
     #[allow(clippy::explicit_counter_loop)]
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> TicTacToeMove {
+    fn _choose_move<GM: GameMove>(&mut self, board: &(impl GameBoard<GM>)) -> GM {
         println!("{:?} ForgetfulSearchAgent is thinking...", self.player);
         let valid_moves = board.get_valid_moves();
         let num_moves = valid_moves.len();
 
         let mut max_score = -((2 as isize).pow(62));
         let mut total_playouts = 0;
-        let (row, col, _) = valid_moves[0];
-        let mut best_rowcol = (row, col);
+        let mut best_move = valid_moves[0];
 
         let (sender, receiver) = mpsc::channel();
 
         let now = Instant::now();
-        for (row, col, player) in valid_moves {
+        for move_ in valid_moves {
             // need a mutable copy here so we can use recursive backtracking without needing to make
             // a copy of the board at each step
             let mut theoretical_board = board.clone();
@@ -197,26 +217,26 @@ impl TicTacToeAgent for ForgetfulSearchAgent {
             // our "playout budget" for a single move is the total budget split evenly
             // between all the current possible moves
             let move_budget = self.playout_budget / num_moves;
+            let mut theoretical_move = move_.clone();
             thread::spawn(move || {
                 let outcomes = theoretical_self.score_move(
                     &mut theoretical_board,
-                    player,
-                    row,
-                    col,
+                    &mut theoretical_move,
                     move_budget,
                 );
-                new_sender.send((outcomes, row, col)).unwrap();
+                new_sender.send((outcomes, move_)).unwrap();
             });
         }
 
         let mut threads_finished = 0;
-        for (outcomes, row, col) in receiver {
+        for (outcomes, move_) in receiver {
             threads_finished += 1;
 
-            println!("Evaluating move (row {}, col {}), {:?}", row, col, outcomes);
+            //println!("Evaluating move (row {}, col {}), {:?}", row, col, outcomes);
+            println!("Evaluating move {:?}: {:?}", move_, outcomes);
 
             if outcomes.score > max_score {
-                best_rowcol = (row, col);
+                best_move = move_;
                 max_score = outcomes.score;
             }
 
@@ -233,38 +253,26 @@ Chosen move:      {:?}
 Total playouts:   {}
 Choosing took:    {:?}
 Playout rate:     {:.2}/sec",
-            best_rowcol,
+            best_move,
             total_playouts,
             now.elapsed(),
             (total_playouts as f64 / (now.elapsed().as_nanos() as f64)) * 1_000_000_000.0
         );
 
-        let (row, col) = best_rowcol;
-        (row, col, self.player)
-    }
-}
-
-impl ForgetfulSearchAgent {
-    pub fn new(player: Player, playout_budget: usize) -> ForgetfulSearchAgent {
-        ForgetfulSearchAgent {
-            player,
-            playout_budget,
-        }
+        best_move
     }
 
     /// Scores a given move by playing it out on a theoretical board alternating between the agent and
     /// the opponent player taking turns (by recursively calling itself) until it reaches an end
     /// state as many times as it can before it reaches its playout_threshold.
-    fn score_move(
+    fn score_move<GM: GameMove>(
         &self,
-        board: &mut TicTacToeBoard,
-        player: Player,
-        row: usize,
-        col: usize,
+        board: &mut impl GameBoard<GM>,
+        move_: &mut GM,
         playout_budget: usize,
     ) -> Outcomes {
         // play the move in question on the theoretical board
-        if let Ok(Ended(endstate)) = board.enter_move((row, col, player)) {
+        if let Ok(Ended(endstate)) = board.enter_move(*move_) {
             // backtrack once we're done calculating
             if board.undo_move().is_err() {
                 panic!("ForgetfulSearchAgent tried to do an illegal undo_move() at game end, board: {:?}", board);
@@ -294,12 +302,13 @@ impl ForgetfulSearchAgent {
         let mut valid_moves = board.get_valid_moves();
         let mut rng = thread_rng();
         valid_moves.shuffle(&mut rng);
-        let opp = player.get_opponent();
+        let opp = move_.player().get_opponent();
+        move_.set_player(opp);
 
         // recurse to the possible subsequent moves and score them
         let mut outcomes = Outcomes::new(0, 0);
-        for (new_r, new_c, _) in &valid_moves {
-            outcomes = outcomes + self.score_move(board, opp, *new_r, *new_c, playout_budget);
+        for move_ in valid_moves.iter_mut() {
+            outcomes = outcomes + self.score_move(board, move_, playout_budget);
 
             if outcomes.total >= playout_budget {
                 // we've met or surpassed the total # of games we're supposed to play out

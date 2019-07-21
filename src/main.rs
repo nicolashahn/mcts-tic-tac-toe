@@ -3,7 +3,7 @@ use std::io;
 
 #[allow(unused_imports)]
 use agents::{ForgetfulSearchAgent, HumanAgent, MCTSAgent};
-use board_games::{Player, TicTacToeBoard};
+use board_games::{Player, TicTacToeBoard, TicTacToeMove};
 use mcts::{agents, board_games, play};
 
 const BOARD_SIZE: usize = 5;
@@ -13,15 +13,15 @@ const PLAYOUT_BUDGET: usize = 250_000;
 
 // TODO add command line flags to control board size, player agent types, playout budget
 fn main() -> io::Result<()> {
-    let mut board = TicTacToeBoard::new(BOARD_SIZE);
+    let board = TicTacToeBoard::new(BOARD_SIZE);
 
-    let mut agent1 = HumanAgent::new(Player::P1);
+    let agent1 = HumanAgent::new(Player::P1);
     // To see two AI agents duel each other:
     //let mut agent1 = ForgetfulSearchAgent::new(Player::P1, 2_000_000);
     //let mut agent1 = MCTSAgent::new(Player::P1, PLAYOUT_BUDGET, board.clone());
 
-    //let mut agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);
-    let mut agent2 = MCTSAgent::new(Player::P2, PLAYOUT_BUDGET, board.clone());
+    let agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);
+    //let mut agent2 = MCTSAgent::new(Player::P2, PLAYOUT_BUDGET, board.clone());
 
-    play(&mut agent1, &mut agent2, &mut board)
+    play(agent1, agent2, board)
 }

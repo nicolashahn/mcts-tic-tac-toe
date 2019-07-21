@@ -43,8 +43,16 @@ impl Player {
     }
 }
 
+/// A move in a (board) game, an action that an agent can take when it is their turn. For example,
+/// a Tic Tac Toe move can be represented as (row, column, player).
+pub trait GameMove: fmt::Debug + Send + Sync + Clone + Copy + 'static {
+    /// Get the player that is making this move.
+    fn player(&self) -> Player;
+    fn set_player(&mut self, p: Player);
+}
+
 /// Functionality associated with any board-game-like object.
-pub trait GameBoard<GameMove>: Clone {
+pub trait GameBoard<GameMove>: Clone + fmt::Debug + Send + Sync + 'static {
     /// The information required to enter a move onto the game board.
 
     /// Enter a move onto the board.
@@ -113,6 +121,15 @@ impl fmt::Debug for TicTacToeBoard {
 /// The information needed to enter a move to the tic tac toe board.
 /// (row, col, player)
 pub type TicTacToeMove = (usize, usize, Player);
+
+impl GameMove for TicTacToeMove {
+    fn player(&self) -> Player {
+        self.2
+    }
+    fn set_player(&mut self, p: Player) {
+        self.2 = p;
+    }
+}
 
 impl GameBoard<TicTacToeMove> for TicTacToeBoard {
     /// Print the board to stdout with the column and row labels:

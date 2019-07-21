@@ -5,13 +5,13 @@ pub mod board_games;
 use board_games::EndState::{Draw, Winner};
 use board_games::GameState::{Ended, Ongoing};
 use board_games::Player::{P1, P2};
-use board_games::{GameBoard, TicTacToeAgent, TicTacToeBoard};
+use board_games::{BoardGameAgent, GameBoard, GameMove};
 
 /// Two agents (human or AI) play against each other.
-pub fn play(
-    agent1: &mut TicTacToeAgent,
-    agent2: &mut TicTacToeAgent,
-    board: &mut TicTacToeBoard,
+pub fn play<GM: GameMove>(
+    mut agent1: impl BoardGameAgent<GM>,
+    mut agent2: impl BoardGameAgent<GM>,
+    mut board: impl GameBoard<GM>,
 ) -> io::Result<()> {
     println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
     board.display();
