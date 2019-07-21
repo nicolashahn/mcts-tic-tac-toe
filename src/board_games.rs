@@ -69,6 +69,9 @@ pub trait GameBoard<GameMove>: Clone + fmt::Debug + Send + Sync + 'static {
 
     /// Undo the last move that was made (for backtracking in tree search).
     fn undo_move(&mut self) -> Result<(), &str>;
+
+    /// Get the history of the moves made in order.
+    fn move_history(&self) -> Vec<GameMove>;
 }
 
 /// An agent that can choose a move from a tic-tac-toe board. Self is mutable because AI agents
@@ -96,7 +99,7 @@ pub struct TicTacToeBoard {
     // for example: 3x3 grid would be a vec of length 9
     pub cells: Vec<Cell>,
     // the history of the moves played: (P,(R,C)) means player P made a move at row R, col C
-    pub move_history: Vec<(Player, (usize, usize))>,
+    pub move_history: Vec<TicTacToeMove>,
 }
 
 impl fmt::Debug for TicTacToeBoard {
@@ -166,8 +169,8 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
     /// Does P1 get to make the next move?
     fn is_p1_turn(&self) -> bool {
         match self.move_history.last() {
-            None | Some(&(P2, _)) => true,
-            Some(&(P1, _)) => false,
+            None | Some(&(_, _, P2)) => true,
+            Some(&(_, _, P1)) => false,
         }
     }
 
@@ -175,7 +178,7 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
     /// end state. Enables more efficient search b/c we don't need to create copies of the board.
     fn undo_move(&mut self) -> Result<(), &str> {
         match self.move_history.pop() {
-            Some((_, (r, c))) => {
+            Some((r, c, _)) => {
                 self.cells[r * self.size + c] = Empty;
                 Ok(())
             }
@@ -210,7 +213,7 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
             Empty => self.cells[idx] = Full(player),
             _ => return Err(CELL_TAKEN),
         }
-        self.move_history.push((player, (row, col)));
+        self.move_history.push((row, col, player));
 
         if self.move_wins_game(row, col, player) {
             return Ok(Ended(Winner(player)));
@@ -221,6 +224,10 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
         }
 
         Ok(Ongoing)
+    }
+
+    fn move_history(&self) -> Vec<TicTacToeMove> {
+        self.move_history
     }
 }
 
