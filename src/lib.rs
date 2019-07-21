@@ -8,10 +8,10 @@ use board_games::Player::{P1, P2};
 use board_games::{BoardGameAgent, GameBoard, GameMove};
 
 /// Two agents (human or AI) play against each other.
-pub fn play<GM: GameMove>(
-    mut agent1: impl BoardGameAgent<GM>,
-    mut agent2: impl BoardGameAgent<GM>,
-    mut board: impl GameBoard<GM>,
+pub fn play<GM: GameMove, GB: GameBoard<GM>>(
+    mut agent1: impl BoardGameAgent<GM, GB>,
+    mut agent2: impl BoardGameAgent<GM, GB>,
+    mut board: GB,
 ) -> io::Result<()> {
     println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
     board.display();

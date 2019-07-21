@@ -3,7 +3,7 @@ use std::io;
 
 #[allow(unused_imports)]
 use agents::{ForgetfulSearchAgent, HumanAgent, MCTSAgent};
-use board_games::{Player, TicTacToeBoard, TicTacToeMove};
+use board_games::{Player, TicTacToeBoard};
 use mcts::{agents, board_games, play};
 
 const BOARD_SIZE: usize = 5;
@@ -20,8 +20,8 @@ fn main() -> io::Result<()> {
     //let mut agent1 = ForgetfulSearchAgent::new(Player::P1, 2_000_000);
     //let mut agent1 = MCTSAgent::new(Player::P1, PLAYOUT_BUDGET, board.clone());
 
-    let agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);
-    //let mut agent2 = MCTSAgent::new(Player::P2, PLAYOUT_BUDGET, board.clone());
+    //let agent2 = ForgetfulSearchAgent::new(Player::P2, PLAYOUT_BUDGET);
+    let agent2 = MCTSAgent::new(Player::P2, PLAYOUT_BUDGET, board.clone());
 
     play(agent1, agent2, board)
 }
