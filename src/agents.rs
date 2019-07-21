@@ -12,14 +12,14 @@ use std::time::Instant;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-use crate::board_games;
+use crate::board_game;
+use crate::tictactoe;
 
-use board_games::EndState::{Draw, Winner};
-use board_games::GameState::{Ended, Ongoing};
-use board_games::Player::{P1, P2};
-use board_games::{
-    BoardGameAgent, EndState, GameBoard, GameMove, Player, TicTacToeBoard, TicTacToeMove, ALPHABET,
-};
+use board_game::EndState::{Draw, Winner};
+use board_game::GameState::{Ended, Ongoing};
+use board_game::Player::{P1, P2};
+use board_game::{BoardGameAgent, EndState, GameBoard, GameMove, Player, ALPHABET};
+use tictactoe::{TicTacToeBoard, TicTacToeMove};
 
 /*
  * -----------

@@ -1,10 +1,12 @@
 /// Command line interface for playing tic-tac-toe against an AI.
 use std::io;
 
+use mcts::{agents, board_game, play, tictactoe};
+
 #[allow(unused_imports)]
 use agents::{ForgetfulSearchAgent, HumanAgent, MCTSAgent};
-use board_games::{Player, TicTacToeBoard};
-use mcts::{agents, board_games, play};
+use board_game::Player;
+use tictactoe::TicTacToeBoard;
 
 const BOARD_SIZE: usize = 5;
 // number of random games to play out from a given game state

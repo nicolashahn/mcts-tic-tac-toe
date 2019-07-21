@@ -1,96 +1,16 @@
 /// Tic Tac Toe game interface.
 use std::fmt;
-use std::hash::Hash;
 
-use Cell::{Empty, Full};
-use EndState::{Draw, Winner};
-use GameState::{Ended, Ongoing};
-use Player::{P1, P2};
+use crate::board_game;
 
-pub const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
-
-// Error messages
-const OUT_OF_RANGE: &str = "out of range";
-const CELL_TAKEN: &str = "cell taken";
-const NO_MOVE_TO_UNDO: &str = "no move to undo";
-
-/// Did the game end in a draw or was there a winner?
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum EndState {
-    Winner(Player),
-    Draw,
-}
-
-/// Has the game ended or is it ongoing?
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum GameState {
-    Ended(EndState),
-    Ongoing,
-}
-
-/// Used for deciding whose turn it is. P1 goes first.
-#[derive(Eq, Hash, Clone, Copy, Debug, PartialEq)]
-pub enum Player {
-    P1,
-    P2,
-}
-
-impl Player {
-    pub fn get_opponent(self) -> Player {
-        match self {
-            P1 => P2,
-            P2 => P1,
-        }
-    }
-}
-
-/// A move in a (board) game, an action that an agent can take when it is their turn. For example,
-/// a Tic Tac Toe move can be represented as (row, column, player).
-pub trait GameMove: fmt::Debug + Send + Sync + Clone + Copy + Eq + Hash + 'static {
-    /// Get the player that is making this move.
-    fn player(&self) -> Player;
-    fn set_player(&mut self, p: Player);
-}
-
-/// Functionality associated with any board-game-like object.
-pub trait GameBoard<GameMove>:
-    Clone + fmt::Debug + Send + Sync + std::marker::Sized + 'static
-{
-    /// The information required to enter a move onto the game board.
-
-    /// Enter a move onto the board.
-    fn enter_move(&mut self, move_: GameMove) -> Result<GameState, &str>;
-
-    /// Get all the valid moves that are allowed at the board's current state.
-    fn get_valid_moves(&self) -> Vec<GameMove>;
-
-    /// Is it the first player's turn to move?.
-    fn is_p1_turn(&self) -> bool;
-
-    /// Print a representation of the board to STDOUT.
-    fn display(&self);
-
-    /// Undo the last move that was made (for backtracking in tree search).
-    fn undo_move(&mut self) -> Result<(), &str>;
-
-    /// Get the history of the moves made in order.
-    fn move_history(&self) -> Vec<GameMove>;
-}
-
-pub trait BoardGameAgent<GM, GB>
-where
-    GM: GameMove,
-    GB: GameBoard<GM>,
-{
-    fn choose_move(&mut self, board: &GB) -> GM;
-}
-
-/// Represents a single cell of the tic-tac-toe board.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Cell {
-    Empty,
-    Full(Player),
-}
+use board_game::Cell::{Empty, Full};
+use board_game::EndState::{Draw, Winner};
+use board_game::GameState::{Ended, Ongoing};
+use board_game::Player::{P1, P2};
+use board_game::{
+    Cell, GameBoard, GameMove, GameState, Player, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
+    OUT_OF_RANGE,
+};
 
 /// Store the size and state of the tic-tac-toe board.
 #[derive(Clone, PartialEq)]
@@ -188,6 +108,7 @@ impl GameBoard<TicTacToeMove> for TicTacToeBoard {
     }
 
     /// Return a vector of (row, col) legal moves the player can choose.
+    #[allow(clippy::match_bool)]
     fn get_valid_moves(&self) -> Vec<TicTacToeMove> {
         let mut valid_moves = Vec::new();
         for (i, cell) in self.cells.iter().enumerate() {

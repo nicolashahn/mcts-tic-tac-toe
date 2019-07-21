@@ -1,19 +1,21 @@
 use std::io;
 pub mod agents;
-pub mod board_games;
+pub mod board_game;
+pub mod tictactoe;
 
-use board_games::EndState::{Draw, Winner};
-use board_games::GameState::{Ended, Ongoing};
-use board_games::Player::{P1, P2};
-use board_games::{BoardGameAgent, GameBoard, GameMove};
+use board_game::EndState::{Draw, Winner};
+use board_game::GameState::{Ended, Ongoing};
+use board_game::Player::{P1, P2};
+use board_game::{BoardGameAgent, GameBoard, GameMove};
 
 /// Two agents (human or AI) play against each other.
+#[allow(clippy::match_bool)]
 pub fn play<GM: GameMove, GB: GameBoard<GM>>(
     mut agent1: impl BoardGameAgent<GM, GB>,
     mut agent2: impl BoardGameAgent<GM, GB>,
     mut board: GB,
 ) -> io::Result<()> {
-    println!("\nIT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!");
+    println!("\nStarting a game");
     board.display();
 
     loop {
