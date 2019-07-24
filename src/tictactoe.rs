@@ -8,19 +8,19 @@ use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
 use board_game::{
-    Cell, GameBoard, GameState, Player, RowColPlayer, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
+    Cell, GameBoard, GameState, Player, RCPMove, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
     OUT_OF_RANGE,
 };
 
 /// Store the size and state of the tic-tac-toe board.
 #[derive(Clone, PartialEq)]
 pub struct TicTacToeBoard {
-    // dimension of the board (total number of cells = size * size)
+    // Dimension of the board (total number of cells = size * size)
     pub size: usize,
-    // for example: 3x3 grid would be a vec of length 9
+    // For example: 3x3 grid would be a vec of length 9
     pub cells: Vec<Cell>,
-    // the history of the moves played: (R,C,P) means player P made a move at row R, col C
-    pub move_history: Vec<RowColPlayer>,
+    // The history of the moves played: (R,C,P) means player P made a move at row R, col C
+    pub move_history: Vec<RCPMove>,
 }
 
 impl fmt::Debug for TicTacToeBoard {
@@ -42,7 +42,7 @@ impl fmt::Debug for TicTacToeBoard {
     }
 }
 
-impl GameBoard<RowColPlayer> for TicTacToeBoard {
+impl GameBoard<RCPMove> for TicTacToeBoard {
     /// Print the board to stdout with the column and row labels:
     ///
     ///   abc
@@ -96,7 +96,7 @@ impl GameBoard<RowColPlayer> for TicTacToeBoard {
 
     /// Return a vector of (row, col) legal moves the player can choose.
     #[allow(clippy::match_bool)]
-    fn get_valid_moves(&self) -> Vec<RowColPlayer> {
+    fn get_valid_moves(&self) -> Vec<RCPMove> {
         let mut valid_moves = Vec::new();
         for (i, cell) in self.cells.iter().enumerate() {
             if let Empty = cell {
@@ -111,7 +111,7 @@ impl GameBoard<RowColPlayer> for TicTacToeBoard {
     }
 
     /// Return Ok(Ended(_) if game is over, Ok(Ongoing) if it continues, Err if invalid move.
-    fn enter_move(&mut self, move_: RowColPlayer) -> Result<GameState, &str> {
+    fn enter_move(&mut self, move_: RCPMove) -> Result<GameState, &str> {
         let (row, col, player) = move_;
 
         if row >= self.size || col >= self.size {
@@ -135,7 +135,7 @@ impl GameBoard<RowColPlayer> for TicTacToeBoard {
         Ok(Ongoing)
     }
 
-    fn move_history(&self) -> Vec<RowColPlayer> {
+    fn move_history(&self) -> Vec<RCPMove> {
         self.move_history.clone()
     }
 }

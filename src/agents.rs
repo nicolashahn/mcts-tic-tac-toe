@@ -18,7 +18,7 @@ use crate::tictactoe;
 use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
-use board_game::{EndState, GameBoard, GameMove, Player, RowColPlayer, ALPHABET};
+use board_game::{EndState, GameBoard, GameMove, Player, RCPMove, ALPHABET};
 use tictactoe::TicTacToeBoard;
 
 /*
@@ -43,8 +43,8 @@ pub struct HumanAgent {
     pub player: Player,
 }
 
-impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for HumanAgent {
-    fn choose_move(&mut self, _board: &TicTacToeBoard) -> RowColPlayer {
+impl BoardGameAgent<RCPMove, TicTacToeBoard> for HumanAgent {
+    fn choose_move(&mut self, _board: &TicTacToeBoard) -> RCPMove {
         loop {
             println!("Enter a move (like \"a0\"):");
             match self.get_move() {
@@ -102,8 +102,8 @@ pub struct RandomAgent {
     player: Player,
 }
 
-impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for RandomAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> RowColPlayer {
+impl BoardGameAgent<RCPMove, TicTacToeBoard> for RandomAgent {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> RCPMove {
         Self::get_random_move_choice(board)
     }
 }
@@ -113,7 +113,7 @@ impl RandomAgent {
         RandomAgent { player }
     }
 
-    pub fn get_random_move_choice<GM: Clone>(board: &impl GameBoard<GM>) -> GM {
+    pub fn get_random_move_choice<GM: GameMove>(board: &impl GameBoard<GM>) -> GM {
         let valid_moves = board.get_valid_moves();
         let mut rng = thread_rng();
         (*valid_moves.choose(&mut rng).unwrap()).clone()
@@ -160,8 +160,8 @@ pub struct ForgetfulSearchAgent {
     playout_budget: usize,
 }
 
-impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for ForgetfulSearchAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> RowColPlayer {
+impl BoardGameAgent<RCPMove, TicTacToeBoard> for ForgetfulSearchAgent {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> RCPMove {
         let theoretical_board = board.clone();
         self._choose_move(&theoretical_board)
     }
@@ -499,8 +499,8 @@ where
     exploration_constant: f64,
 }
 
-impl BoardGameAgent<RowColPlayer, TicTacToeBoard> for MCTSAgent<RowColPlayer, TicTacToeBoard> {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> RowColPlayer {
+impl BoardGameAgent<RCPMove, TicTacToeBoard> for MCTSAgent<RCPMove, TicTacToeBoard> {
+    fn choose_move(&mut self, board: &TicTacToeBoard) -> RCPMove {
         let theoretical_board = board.clone();
         self.search(&theoretical_board)
     }

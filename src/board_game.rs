@@ -56,18 +56,16 @@ pub trait GameMove: fmt::Debug + Send + Sync + Clone + Copy + Eq + Hash + 'stati
     fn set_player(&mut self, p: Player);
 }
 
-/// Functionality associated with any board-game-like object.
-pub trait GameBoard<GameMove>:
-    Clone + fmt::Debug + Send + Sync + std::marker::Sized + 'static
+/// Functionality associated with any two player board-game-like object.
+pub trait GameBoard<GM>: Clone + fmt::Debug + Send + Sync + std::marker::Sized + 'static
+where
+    GM: GameMove,
 {
     /// Enter a move onto the board.
-    fn enter_move(&mut self, move_: GameMove) -> Result<GameState, &str>;
+    fn enter_move(&mut self, move_: GM) -> Result<GameState, &str>;
 
     /// Get all the valid moves that are allowed at the board's current state.
-    fn get_valid_moves(&self) -> Vec<GameMove>;
-
-    /// True if it's P1's turn, false if P2's.
-    fn is_p1_turn(&self) -> bool;
+    fn get_valid_moves(&self) -> Vec<GM>;
 
     /// Print a representation of the board to STDOUT.
     fn display(&self);
@@ -76,14 +74,24 @@ pub trait GameBoard<GameMove>:
     fn undo_move(&mut self) -> Result<(), &str>;
 
     /// Get the history of the moves made in order (last move is most recent).
-    fn move_history(&self) -> Vec<GameMove>;
+    fn move_history(&self) -> Vec<GM>;
+
+    /// True if it's P1's turn, false if P2's.
+    /// NOTE: This method you get for free by implementing `move_history()`, but a specific
+    /// implementation for each concrete type can be much more performant.
+    fn is_p1_turn(&self) -> bool {
+        match self.move_history().last() {
+            Some(move_) => move_.player() == P2,
+            None => true,
+        }
+    }
 }
 
 /// Basic game move for any game that just allows player to lay down pieces on a grid.
 /// (row, col, player)
-pub type RowColPlayer = (usize, usize, Player);
+pub type RCPMove = (usize, usize, Player);
 
-impl GameMove for RowColPlayer {
+impl GameMove for RCPMove {
     fn player(&self) -> Player {
         self.2
     }
