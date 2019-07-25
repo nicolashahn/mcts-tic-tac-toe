@@ -18,10 +18,6 @@ use board_game::{
     OUT_OF_BOUNDS, OUT_OF_RANGE,
 };
 
-// Relative coordinates of all the adjacent cells of a given cell in a hex grid. Ordered
-// counterclockwise starting from the 9 o'clock position.
-const HEX_ADJACENTS: [(isize, isize); 6] = [(-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1), (0, -1)];
-
 /// Store the size and state of the tic-tac-toe board.
 #[derive(Clone, PartialEq)]
 pub struct FourNotThreeBoard {
@@ -58,22 +54,6 @@ impl FourNotThreeBoard {
         }
 
         board
-    }
-
-    /// Get the cells that are adjacent to the one given. With a hex grid, there should be 6 cells
-    /// returned, unless the given cell is at the edge of the grid.
-    fn get_adjacents(&self, rowcol: (usize, usize)) -> Vec<(usize, usize)> {
-        let (row, col) = rowcol;
-        let mut adjacents = vec![];
-        for (ar, ac) in HEX_ADJACENTS.iter() {
-            let (nr, nc) = (row as isize + ar, col as isize + ac);
-            // check that the neighbor is in bounds
-            if nr >= 0 && nr < self.size as isize && nc >= 0 && nc < self.size as isize {
-                adjacents.push((nr as usize, nc as usize));
-            }
-        }
-
-        adjacents
     }
 
     /// Given a line of cells, check whether or not a player has either gotten exactly 3 in a row,
@@ -198,30 +178,6 @@ fn test_maybe_get_winner() {
     assert_eq!(board.maybe_get_winner(idx_to_move(17, P1)), Some(P2));
     board.cells[21] = Full(P1);
     assert_eq!(board.maybe_get_winner(idx_to_move(21, P1)), Some(P1));
-}
-
-#[test]
-fn test_get_adjacents() {
-    let size = 3;
-    let board = FourNotThreeBoard::new(size);
-
-    let mut corner = board.get_adjacents((0, 0));
-    corner.sort();
-    let mut expected = vec![(1, 0), (0, 1)];
-    expected.sort();
-    assert_eq!(corner, expected);
-
-    let mut side = board.get_adjacents((0, 1));
-    side.sort();
-    let mut expected = vec![(0, 0), (1, 0), (1, 1), (0, 2)];
-    expected.sort();
-    assert_eq!(side, expected);
-
-    let mut mid = board.get_adjacents((1, 1));
-    mid.sort();
-    let mut expected = vec![(0, 1), (0, 2), (1, 2), (2, 1), (2, 0), (1, 0)];
-    expected.sort();
-    assert_eq!(mid, expected);
 }
 
 impl fmt::Debug for FourNotThreeBoard {
