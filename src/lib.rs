@@ -1,6 +1,7 @@
 use std::io;
 pub mod agents;
 pub mod board_game;
+pub mod fournotthree;
 pub mod tictactoe;
 
 use agents::BoardGameAgent;

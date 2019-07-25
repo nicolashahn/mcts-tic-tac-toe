@@ -10,6 +10,8 @@ pub const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 pub const OUT_OF_RANGE: &str = "out of range";
 pub const CELL_TAKEN: &str = "cell taken";
 pub const NO_MOVE_TO_UNDO: &str = "no move to undo";
+pub const NOT_YOUR_TURN: &str = "not your turn";
+pub const OUT_OF_BOUNDS: &str = "out of bounds";
 
 /// Did the game end in a draw or was there a winner?
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -44,6 +46,7 @@ impl Player {
 /// Represents a single cell of a game board.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Cell {
+    OutOfBounds,
     Empty,
     Full(Player),
 }

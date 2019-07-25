@@ -3,13 +3,13 @@ use std::fmt;
 
 use crate::board_game;
 
-use board_game::Cell::{Empty, Full};
+use board_game::Cell::{Empty, Full, OutOfBounds};
 use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
 use board_game::{
-    Cell, GameBoard, GameState, Player, RCPMove, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
-    OUT_OF_RANGE,
+    Cell, GameBoard, GameState, Player, RCPMove, ALPHABET, CELL_TAKEN, NOT_YOUR_TURN,
+    NO_MOVE_TO_UNDO, OUT_OF_RANGE,
 };
 
 /// Store the size and state of the tic-tac-toe board.
@@ -28,6 +28,7 @@ impl fmt::Debug for TicTacToeBoard {
         let mut board_repr = String::new();
         for cell in self.cells.iter() {
             let cell_repr = match cell {
+                OutOfBounds => ' ',
                 Empty => '.',
                 Full(P1) => 'o',
                 Full(P2) => 'x',
@@ -45,32 +46,39 @@ impl fmt::Debug for TicTacToeBoard {
 impl GameBoard<RCPMove> for TicTacToeBoard {
     /// Print the board to stdout with the column and row labels:
     ///
-    ///   abc
-    /// 0 ...
-    /// 1 ...
-    /// 2 ...
+    ///    a b c
+    /// 0  . . .
+    /// 1  . . .
+    /// 2  . . .
     ///
-    /// NOTE: this will fail with self.size > 10, need to implement smarter indexing
     fn display(&self) {
-        if self.size > 10 {
+        if self.size > 26 {
             println!("The board is too large to print with indices");
             return;
         }
-        println!("\n  {}", &ALPHABET.to_string()[..self.size]);
+
+        let alpha_w_spaces: String = String::from(&ALPHABET[..self.size])
+            .chars()
+            .map(|c: char| return format!("{} ", c))
+            .collect();
+        println!("\n   {}", alpha_w_spaces);
+
         for i in 0..self.size {
             let mut row = String::with_capacity(self.size as usize);
-            row.push_str(&format!("{:<2}", i));
+            row.push_str(&format!("{:<3}", i));
             for j in 0..self.size {
-                row.push(match &self.cells[i * self.size + j] {
-                    Empty => '.',
+                row.push_str(match &self.cells[i * self.size + j] {
+                    OutOfBounds => "  ",
+                    Empty => ". ",
                     Full(player) => match player {
-                        P1 => 'o',
-                        P2 => 'x',
+                        P1 => "o ",
+                        P2 => "x ",
                     },
                 });
             }
             println!("{}", row);
         }
+
         println!("\n");
     }
 
@@ -113,6 +121,12 @@ impl GameBoard<RCPMove> for TicTacToeBoard {
     /// Return Ok(Ended(_) if game is over, Ok(Ongoing) if it continues, Err if invalid move.
     fn enter_move(&mut self, move_: RCPMove) -> Result<GameState, &str> {
         let (row, col, player) = move_;
+
+        if let Some(&(_, _, last_player)) = self.move_history.last() {
+            if last_player == player {
+                return Err(NOT_YOUR_TURN);
+            }
+        }
 
         if row >= self.size || col >= self.size {
             return Err(OUT_OF_RANGE);
@@ -254,25 +268,37 @@ fn test_undo_move() {
     let size = 3;
     let mut board = TicTacToeBoard::new(size);
     // draw game
-    assert!(Ok(Ongoing) == board.enter_move((1, 1, P1)));
-    assert!(Ok(Ongoing) == board.enter_move((1, 2, P2)));
-    assert!(Ok(Ongoing) == board.enter_move((1, 0, P1)));
-    assert!(Ok(Ongoing) == board.enter_move((0, 2, P2)));
-    assert!(Ok(Ongoing) == board.enter_move((2, 2, P1)));
-    assert!(Ok(Ongoing) == board.enter_move((0, 1, P1)));
-    assert!(Ok(Ongoing) == board.enter_move((0, 0, P2)));
-    assert!(Ok(Ongoing) == board.enter_move((2, 0, P1)));
-    assert!(Ok(Ended(Draw)) == board.enter_move((2, 1, P2)));
-    assert!(board.move_history.len() == 9);
+    assert_eq!(Ok(Ongoing), board.enter_move((0, 0, P1)));
+    assert_eq!(Ok(Ongoing), board.enter_move((0, 1, P2)));
+    assert_eq!(Ok(Ongoing), board.enter_move((0, 2, P1)));
+    assert_eq!(Ok(Ongoing), board.enter_move((1, 1, P2)));
+    assert_eq!(Ok(Ongoing), board.enter_move((1, 2, P1)));
+    assert_eq!(Ok(Ongoing), board.enter_move((2, 0, P2)));
+    assert_eq!(Ok(Ongoing), board.enter_move((1, 0, P1)));
+    assert_eq!(Ok(Ongoing), board.enter_move((2, 2, P2)));
+    assert_eq!(Ok(Ended(Draw)), board.enter_move((2, 1, P1)));
+    assert_eq!(board.move_history.len(), 9);
     // undo last two moves and make P1 win
-    assert!(Ok(()) == board.undo_move());
-    assert!(!board.is_p1_turn());
-    assert!(Ok(()) == board.undo_move());
+    assert_eq!(Ok(()), board.undo_move());
+    assert_eq!(board.move_history.len(), 8);
     assert!(board.is_p1_turn());
-    assert!(Ok(Ended(Winner(P1))) == board.enter_move((2, 1, P1)));
+    assert_eq!(Ok(()), board.undo_move());
+    assert!(!board.is_p1_turn());
+    assert_eq!(Ok(Ended(Winner(P2))), board.enter_move((2, 1, P2)));
     for _ in 0..8 {
-        assert!(Ok(()) == board.undo_move());
+        assert_eq!(Ok(()), board.undo_move());
     }
     assert!(board.move_history.is_empty());
-    assert!(Err(NO_MOVE_TO_UNDO) == board.undo_move());
+    assert_eq!(Err(NO_MOVE_TO_UNDO), board.undo_move());
+}
+
+#[test]
+fn test_is_p1_turn() {
+    let size = 3;
+    let mut board = TicTacToeBoard::new(size);
+    assert!(board.is_p1_turn());
+    board.enter_move((0, 0, P1));
+    assert!(!board.is_p1_turn());
+    board.enter_move((1, 0, P2));
+    assert!(board.is_p1_turn());
 }

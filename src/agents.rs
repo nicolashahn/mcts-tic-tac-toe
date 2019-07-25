@@ -43,8 +43,11 @@ pub struct HumanAgent {
     pub player: Player,
 }
 
-impl BoardGameAgent<RCPMove, TicTacToeBoard> for HumanAgent {
-    fn choose_move(&mut self, _board: &TicTacToeBoard) -> RCPMove {
+impl<GB> BoardGameAgent<RCPMove, GB> for HumanAgent
+where
+    GB: GameBoard<RCPMove>,
+{
+    fn choose_move(&mut self, _board: &GB) -> RCPMove {
         loop {
             println!("Enter a move (like \"a0\"):");
             match self.get_move() {
@@ -65,6 +68,7 @@ impl HumanAgent {
     /// Accept player input from stdin, parse into (row, col) indexes.
     /// Columns are letter indexes, rows are integers.
     /// Example: "a2" means column 0, row 2
+    /// TODO allow multi-digit row input to boost maximum grid size from 10 to 26
     fn get_move(&self) -> Result<(usize, usize), &'static str> {
         let mut input = String::new();
         if io::stdin().read_line(&mut input).is_err() {
@@ -102,8 +106,11 @@ pub struct RandomAgent {
     player: Player,
 }
 
-impl BoardGameAgent<RCPMove, TicTacToeBoard> for RandomAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> RCPMove {
+impl<GB> BoardGameAgent<RCPMove, GB> for RandomAgent
+where
+    GB: GameBoard<RCPMove>,
+{
+    fn choose_move(&mut self, board: &GB) -> RCPMove {
         Self::get_random_move_choice(board)
     }
 }
@@ -160,8 +167,11 @@ pub struct ForgetfulSearchAgent {
     playout_budget: usize,
 }
 
-impl BoardGameAgent<RCPMove, TicTacToeBoard> for ForgetfulSearchAgent {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> RCPMove {
+impl<GB> BoardGameAgent<RCPMove, GB> for ForgetfulSearchAgent
+where
+    GB: GameBoard<RCPMove>,
+{
+    fn choose_move(&mut self, board: &GB) -> RCPMove {
         let theoretical_board = board.clone();
         self._choose_move(&theoretical_board)
     }
@@ -189,7 +199,7 @@ impl ForgetfulSearchAgent {
         let (sender, receiver) = mpsc::channel();
 
         let now = Instant::now();
-        for mut move_ in valid_moves {
+        for move_ in valid_moves {
             // need a mutable copy here so we can use recursive backtracking without needing to make
             // a copy of the board at each step
             let mut theoretical_board = board.clone();
@@ -200,7 +210,7 @@ impl ForgetfulSearchAgent {
             let move_budget = self.playout_budget / num_moves;
             thread::spawn(move || {
                 let outcomes =
-                    theoretical_self.score_move(&mut theoretical_board, &mut move_, move_budget);
+                    theoretical_self.score_move(&mut theoretical_board, move_, move_budget);
                 new_sender.send((outcomes, move_)).unwrap();
             });
         }
@@ -244,11 +254,11 @@ Playout rate:     {:.2}/sec",
     fn score_move<GM: GameMove>(
         &self,
         board: &mut impl GameBoard<GM>,
-        move_: &mut GM,
+        move_: GM,
         playout_budget: usize,
     ) -> Outcomes {
         // play the move in question on the theoretical board
-        if let Ok(Ended(endstate)) = board.enter_move(*move_) {
+        if let Ok(Ended(endstate)) = board.enter_move(move_) {
             // backtrack once we're done calculating
             if board.undo_move().is_err() {
                 panic!("ForgetfulSearchAgent tried to do an illegal undo_move() at game end, board: {:?}", board);
@@ -278,13 +288,11 @@ Playout rate:     {:.2}/sec",
         let mut valid_moves = board.get_valid_moves();
         let mut rng = thread_rng();
         valid_moves.shuffle(&mut rng);
-        let opp = move_.player().get_opponent();
-        move_.set_player(opp);
 
         // recurse to the possible subsequent moves and score them
         let mut outcomes = Outcomes::new(0, 0);
-        for move_ in valid_moves.iter_mut() {
-            outcomes = outcomes + self.score_move(board, move_, playout_budget);
+        for new_move in valid_moves.iter() {
+            outcomes = outcomes + self.score_move(board, *new_move, playout_budget);
 
             if outcomes.total >= playout_budget {
                 // we've met or surpassed the total # of games we're supposed to play out
@@ -499,8 +507,12 @@ where
     exploration_constant: f64,
 }
 
-impl BoardGameAgent<RCPMove, TicTacToeBoard> for MCTSAgent<RCPMove, TicTacToeBoard> {
-    fn choose_move(&mut self, board: &TicTacToeBoard) -> RCPMove {
+impl<GB> BoardGameAgent<RCPMove, GB> for MCTSAgent<RCPMove, GB>
+where
+    GB: GameBoard<RCPMove>,
+{
+    fn choose_move(&mut self, board: &GB) -> RCPMove {
+        println!("{:?} MCTSAgent is thinking...", self.player);
         let theoretical_board = board.clone();
         self.search(&theoretical_board)
     }
