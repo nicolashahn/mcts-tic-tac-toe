@@ -2,36 +2,36 @@
 
 # Monte Carlo tree search Tic-Tac-Toe AI
 
-An AI agent that can play Tic-Tac-Toe using [Monte
+An AI agent that can play Tic-Tac-Toe (or other games) using [Monte
 Carlo](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search) tree search, and an
 interface for playing against it, written in Rust.
 
 ```
 $ cargo run
 
-IT'S TIC-TAC-TOEEEEEEE TIIIIIIIIME!!!!!!
+Starting a game
 
-  abc
-0 ...
-1 ...
-2 ...
+   a b c
+0  . . .
+1  . . .
+2  . . .
 
 
 Enter a move (like "a0"):
 b1
 
-  abc
-0 ...
-1 .o.
-2 ...
+   a b c
+0  . . .
+1  . o .
+2  . . .
 
 
 P2 MCTSAgent is thinking...
 
-  abc
-0 x..
-1 .o.
-2 ...
+   a b c
+0  x . .
+1  . o .
+2  . . .
 ```
 
 ## Features:
@@ -60,6 +60,19 @@ P2 MCTSAgent is thinking...
     - Lets the user choose moves through a CLI user interface
   - __RandomAgent__
     - Just chooses random moves
+- Can also play [Ty Overby](https://github.com/TyOverby)'s "Four-not-three" hex grid
+  game (replace `TicTacToeBoard` with `FourNotThreeBoard`)
+  - Goal is to get four of your pieces in a row, but if you get only three, you lose
+
+```
+  a b c d e
+0      . . . 0
+ 1    . . . . 1
+  2  . o . . . 2
+   3  . . x .   3
+    4  . . .     4
+        a b c d e
+```
 
 ## TODO:
 - Use [UCT](https://link.springer.com/chapter/10.1007%2F11871842_29) to choose nodes to
@@ -82,7 +95,6 @@ P2 MCTSAgent is thinking...
     - Optionally, a heuristic function that will tell the agent which moves it should
       explore first
   - Other games to target:
-    - [Ty Overby](https://github.com/TyOverby)'s "Four-not-three" hex grid game
     - [Omok(Gomoku)](https://en.wikipedia.org/wiki/Gomoku)
     - Chess - mainly to pit it against the multitude of other AIs
     - Something not 2D-grid based?
