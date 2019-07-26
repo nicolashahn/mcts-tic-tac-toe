@@ -6,3 +6,5 @@ edition = "2018"
 
 [dependencies]
 rand = "*"
+scoped_threadpool = "*"
+num_cpus = "*"

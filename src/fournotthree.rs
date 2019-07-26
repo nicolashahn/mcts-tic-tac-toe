@@ -37,10 +37,10 @@ pub struct FourNotThreeBoard {
 }
 
 impl FourNotThreeBoard {
-    pub fn new(size: usize) -> FourNotThreeBoard {
-        if size % 2 == 0 {
-            panic!("FourNotThree board size must be an odd number");
-        }
+    /// Create a new FourNotThreeBoard with the radius given (number of cells from corner to
+    /// center, including both center and corner cells)
+    pub fn new(radius: usize) -> FourNotThreeBoard {
+        let size = (radius * 2) - 1;
         let mut board = FourNotThreeBoard {
             cells: vec![Empty; (size * size) as usize],
             size,

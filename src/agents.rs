@@ -1,5 +1,7 @@
 /// Agents for TicTacToe.
+extern crate num_cpus;
 extern crate rand;
+extern crate scoped_threadpool;
 
 use std::collections::HashMap;
 use std::f64;
@@ -11,6 +13,7 @@ use std::time::Instant;
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use scoped_threadpool::Pool;
 
 use crate::board_game;
 use crate::tictactoe;
@@ -549,15 +552,27 @@ where
         if let Some(opp_move) = maybe_opp_move {
             self.update_with_opponents_move(opp_move, board);
         }
-        // TODO multithread
-        let mut total_playouts: u64 = 0;
-        for _ in 0..self.playout_budget {
-            if self.root.is_fully_expanded {
-                break;
-            }
-            let _ = self.root.expand();
-            total_playouts += 1;
+
+        // This is only guaranteed to create a new child while the expand() function chooses
+        // unexplored moves first - change this if we choose another method for expansion
+        let num_moves = board.get_valid_moves().len();
+        while self.root.children.len() < num_moves {
+            self.root.expand();
         }
+
+        // TODO get actual total playouts by incrementing inside threads
+        let total_playouts = self.playout_budget;
+        let mut pool = Pool::new(num_cpus::get() as u32);
+        pool.scoped(|scoped| {
+            let playout_budget = self.playout_budget;
+            for (_, child) in &mut self.root.children {
+                scoped.execute(move || {
+                    for _ in 0..playout_budget / num_moves {
+                        child.expand();
+                    }
+                });
+            }
+        });
 
         let best_move = self.get_best_move_and_promote_child();
         println!(
@@ -603,7 +618,10 @@ Playout rate:     {:.2}/sec",
         let mut best_moves: Vec<GM> = vec![];
         for (&move_, child) in self.root.children.iter() {
             let node_val = child.score as f64 / child.visits as f64;
-            println!("Evaluating move {:?}, score: {}", move_, node_val);
+            println!(
+                "Evaluating move {:?}, score: {:<6}, visits: {:<6}, ratio: {}",
+                move_, child.score, child.visits, node_val
+            );
             if node_val > best_val {
                 best_val = node_val;
                 best_moves = vec![move_];
