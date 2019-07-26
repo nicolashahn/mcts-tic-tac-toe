@@ -322,11 +322,6 @@ Playout rate:     {:.2}/sec",
 // https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation
 const DEFAULT_EXPLORATION_CONSTANT: f64 = f64::consts::SQRT_2;
 
-// These may need to be tweaked
-const WIN_REWARD: isize = 1;
-const DRAW_REWARD: isize = 0;
-const LOSS_REWARD: isize = -1;
-
 #[derive(Clone, Debug, PartialEq)]
 /// Tree node for the Monte Carlo search tree.
 pub struct TreeNode<GM, GB>
@@ -344,8 +339,9 @@ where
     is_fully_expanded: bool,
     // Number of games that have been played out from this node.
     visits: usize,
-    // Total summed score for those games, based on number of wins/losses/draws.
-    score: isize,
+    // Number of each outcome possible from this node. Draws = visits - wins - losses
+    wins: usize,
+    losses: usize,
     // Mapping of the valid moves from this board state to the child TreeNodes. This should be
     // empty if the node represents an end state.
     children: HashMap<GM, TreeNode<GM, GB>>,
@@ -382,7 +378,8 @@ where
             is_end_state,
             is_fully_expanded: is_end_state,
             visits: 0,
-            score: 0,
+            wins: 0,
+            losses: 0,
             children: HashMap::new(),
         };
         node.update_from_endstate(endstate);
@@ -415,16 +412,13 @@ where
     /// Update this node's visits and score appropriately.
     fn update_from_endstate(&mut self, endstate: EndState) {
         self.visits += 1;
-        self.score += match endstate {
-            Winner(winner) => {
-                if winner == self.player {
-                    WIN_REWARD
-                } else {
-                    LOSS_REWARD
-                }
+        if let Winner(winner) = endstate {
+            if winner == self.player {
+                self.wins += 1
+            } else {
+                self.losses += 1
             }
-            Draw => DRAW_REWARD,
-        };
+        }
     }
 
     /// If all the node's children have been expanded, set the node as fully expanded.
@@ -533,7 +527,8 @@ where
             is_end_state: false,
             is_fully_expanded: false,
             visits: 0,
-            score: 0,
+            wins: 0,
+            losses: 0,
             children: HashMap::new(),
         };
         MCTSAgent {
@@ -560,8 +555,6 @@ where
             self.root.expand();
         }
 
-        // TODO get actual total playouts by incrementing inside threads
-        let total_playouts = self.playout_budget;
         let mut pool = Pool::new(num_cpus::get() as u32);
         pool.scoped(|scoped| {
             let playout_budget = self.playout_budget;
@@ -574,6 +567,7 @@ where
             }
         });
 
+        let total_playouts: usize = self.root.children.values().map(|child| child.visits).sum();
         let best_move = self.get_best_move_and_promote_child();
         println!(
             "
@@ -614,19 +608,28 @@ Playout rate:     {:.2}/sec",
     /// Also promote the child with the highest score to the root of the tree.
     #[allow(clippy::float_cmp)]
     fn get_best_move_and_promote_child(&mut self) -> GM {
-        let mut best_val = -(f64::powf(2., 63.));
+        let mut best_vals = (0., f64::powf(2., 64.));
         let mut best_moves: Vec<GM> = vec![];
         for (&move_, child) in self.root.children.iter() {
-            let node_val = child.score as f64 / child.visits as f64;
-            println!(
-                "Evaluating move {:?}, score: {:<6}, visits: {:<6}, ratio: {}",
-                move_, child.score, child.visits, node_val
+            let node_vals = (
+                child.wins as f64 / child.visits as f64,
+                child.losses as f64 / child.visits as f64,
             );
-            if node_val > best_val {
-                best_val = node_val;
+            println!(
+                "Evaluating move {:?}:
+    wins: {}, losses: {}, visits: {}, win ratio: {}, loss ratio: {}",
+                move_, child.wins, child.losses, child.visits, node_vals.0, node_vals.1
+            );
+            if node_vals.1 < best_vals.1 {
+                best_vals = node_vals;
                 best_moves = vec![move_];
-            } else if node_val == best_val {
-                best_moves.push(move_);
+            } else if node_vals.1 == best_vals.1 {
+                if node_vals.0 > best_vals.0 {
+                    best_vals = node_vals;
+                    best_moves = vec![move_];
+                } else if node_vals.0 == best_vals.0 {
+                    best_moves.push(move_);
+                }
             }
         }
         let mut rng = thread_rng();
