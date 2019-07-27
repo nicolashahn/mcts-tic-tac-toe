@@ -608,26 +608,30 @@ Playout rate:     {:.2}/sec",
     /// Also promote the child with the highest score to the root of the tree.
     #[allow(clippy::float_cmp)]
     fn get_best_move_and_promote_child(&mut self) -> GM {
-        let mut best_vals = (0., f64::powf(2., 64.));
+        let (mut best_win_r, mut best_loss_r) = (0., f64::powf(2., 64.));
         let mut best_moves: Vec<GM> = vec![];
         for (&move_, child) in self.root.children.iter() {
-            let node_vals = (
+            let (node_win_r, node_loss_r) = (
                 child.wins as f64 / child.visits as f64,
                 child.losses as f64 / child.visits as f64,
             );
             println!(
                 "Evaluating move {:?}:
     wins: {}, losses: {}, visits: {}, win ratio: {}, loss ratio: {}",
-                move_, child.wins, child.losses, child.visits, node_vals.0, node_vals.1
+                move_, child.wins, child.losses, child.visits, node_win_r, node_loss_r
             );
-            if node_vals.1 < best_vals.1 {
-                best_vals = node_vals;
+            // First, choose the move that leads to the fewest losses
+            if node_loss_r < best_loss_r {
+                best_loss_r = node_loss_r;
+                best_win_r = node_win_r;
                 best_moves = vec![move_];
-            } else if node_vals.1 == best_vals.1 {
-                if node_vals.0 > best_vals.0 {
-                    best_vals = node_vals;
+            } else if node_loss_r == best_loss_r {
+                // Then, if we have a tie, choose the one that leads to the most wins
+                if node_win_r > best_win_r {
+                    best_loss_r = node_loss_r;
+                    best_win_r = node_win_r;
                     best_moves = vec![move_];
-                } else if node_vals.0 == best_vals.0 {
+                } else if node_win_r == best_win_r {
                     best_moves.push(move_);
                 }
             }

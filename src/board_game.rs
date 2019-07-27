@@ -77,7 +77,7 @@ where
     fn undo_move(&mut self) -> Result<(), &str>;
 
     /// Get the history of the moves made in order (last move is most recent).
-    fn move_history(&self) -> Vec<GM>;
+    fn move_history(&self) -> &Vec<GM>;
 
     /// True if it's P1's turn, false if P2's.
     /// NOTE: This method you get for free by implementing `move_history()`, but a specific

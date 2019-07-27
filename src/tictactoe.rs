@@ -149,8 +149,8 @@ impl GameBoard<RCPMove> for TicTacToeBoard {
         Ok(Ongoing)
     }
 
-    fn move_history(&self) -> Vec<RCPMove> {
-        self.move_history.clone()
+    fn move_history(&self) -> &Vec<RCPMove> {
+        &self.move_history
     }
 }
 

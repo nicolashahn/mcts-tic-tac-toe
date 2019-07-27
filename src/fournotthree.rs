@@ -14,7 +14,7 @@ use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
 use board_game::{
-    Cell, GameBoard, GameMove, GameState, Player, RCPMove, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
+    Cell, GameBoard, GameState, Player, RCPMove, ALPHABET, CELL_TAKEN, NO_MOVE_TO_UNDO,
     OUT_OF_BOUNDS, OUT_OF_RANGE,
 };
 
@@ -107,6 +107,8 @@ impl FourNotThreeBoard {
         let (row, col, _) = move_;
         let move_i = (row * self.size) + col;
 
+        // Someone winning via four in a row takes precedence over someone losing via three in a
+        // row, so we check for that first
         for for_win in &[true, false] {
             let row_cells = get_filtered_cells(&self.cells, &|i| i / self.size == row);
             let col_cells = get_filtered_cells(&self.cells, &|i| i % self.size == col);
@@ -141,22 +143,23 @@ fn test_check_line() {
 
 #[test]
 fn test_maybe_get_winner() {
-    let size = 5;
     // size 5 board indices, minus the OutOfBounds
     //       2  3  4
     //     6  7  8  9
     //   10 11 12 13 14
     //    15 16 17 18
     //     20 21 22
+    let size = 5;
+    // convert a cell index + player to a (row, col, player) tuple
     let idx_to_move = |i, p| (i / size, i % size, p);
-    let mut board = FourNotThreeBoard::new(size);
-    board.cells[22] = Full(P1);
-    assert_eq!(board.maybe_get_winner(idx_to_move(22, P1)), None);
+    assert_eq!(idx_to_move(12, P1), (2, 2, P1));
 
     // rows
-    for i in 10..13 {
-        board.cells[i] = Full(P1);
-    }
+    let mut board = FourNotThreeBoard::new(size);
+    board.cells[10] = Full(P1);
+    assert_eq!(board.maybe_get_winner(idx_to_move(10, P1)), None);
+    board.cells[11] = Full(P1);
+    board.cells[12] = Full(P1);
     assert_eq!(board.maybe_get_winner(idx_to_move(12, P1)), Some(P2));
     board.cells[13] = Full(P1);
     assert_eq!(board.maybe_get_winner(idx_to_move(13, P1)), Some(P1));
@@ -310,7 +313,7 @@ impl GameBoard<RCPMove> for FourNotThreeBoard {
         Ok(Ongoing)
     }
 
-    fn move_history(&self) -> Vec<RCPMove> {
-        self.move_history.clone()
+    fn move_history(&self) -> &Vec<RCPMove> {
+        &self.move_history
     }
 }
