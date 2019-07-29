@@ -649,11 +649,11 @@ Playout rate:     {:.2}/sec",
 }
 
 /// This test is under the assumption that (1,1) is indeed the best move to make, and that the
-/// agent can always calculate it within 1000 playouts.
+/// agent can always calculate it within 5000 playouts.
 #[test]
 fn test_mcts_agent_tic_tac_toe_first_move() {
     let board = TicTacToeBoard::new(3);
-    let mut agent = MCTSAgent::new(P1, 1000, board.clone());
+    let mut agent = MCTSAgent::new(P1, 5000, board.clone());
     let move_ = agent.search(&board);
     assert!(move_ == (1, 1, P1));
 }
