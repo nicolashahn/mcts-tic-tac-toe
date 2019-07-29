@@ -394,8 +394,11 @@ where
     ) -> EndState {
         let mut curr_player = player.get_opponent();
         loop {
-            //let move_ = RandomAgent::get_random_move_choice(&theoretical_board);
-            let move_ = theoretical_board.get_valid_moves()[0];
+            let mut rng = thread_rng();
+            let &move_ = theoretical_board
+                .get_valid_moves()
+                .choose(&mut rng)
+                .unwrap();
             let game_state = theoretical_board.enter_move(move_);
             curr_player = curr_player.get_opponent();
             match game_state {
