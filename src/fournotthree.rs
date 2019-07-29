@@ -59,7 +59,7 @@ impl FourNotThreeBoard {
     /// Given a line of cells, check whether or not a player has either gotten exactly 3 in a row,
     /// meaning the other player won, or 4/5 in a row, meaning they won. Do only one of these
     /// checks, toggled by the `for_win` argument.
-    fn check_line(line: &Vec<Cell>, for_win: bool) -> Option<Player> {
+    fn check_line(line: &[Cell], for_win: bool) -> Option<Player> {
         let checker = |ct, cell_type: Cell| match cell_type {
             Full(player) => {
                 if for_win && ct > 3 {
@@ -93,7 +93,7 @@ impl FourNotThreeBoard {
 
     /// Check the game board to see if a player has won, and return who did if so.
     fn maybe_get_winner(&self, move_: RCPMove) -> Option<Player> {
-        fn get_filtered_cells(cells: &Vec<Cell>, filter_fn: &Fn(usize) -> bool) -> Vec<Cell> {
+        fn get_filtered_cells(cells: &[Cell], filter_fn: &Fn(usize) -> bool) -> Vec<Cell> {
             let mut filtered_cells = vec![];
             for i in 0..cells.len() {
                 if filter_fn(i) {
@@ -143,20 +143,22 @@ fn test_check_line() {
 
 #[test]
 fn test_maybe_get_winner() {
-    // size 5 board indices, minus the OutOfBounds
+    // radius 3 board indices, minus the OutOfBounds
     //       2  3  4
     //     6  7  8  9
     //   10 11 12 13 14
     //    15 16 17 18
     //     20 21 22
-    let size = 5;
+    let radius = 3;
+    let size = radius * 2 - 1;
     // convert a cell index + player to a (row, col, player) tuple
     let idx_to_move = |i, p| (i / size, i % size, p);
     assert_eq!(idx_to_move(12, P1), (2, 2, P1));
 
     // rows
-    let mut board = FourNotThreeBoard::new(size);
+    let mut board = FourNotThreeBoard::new(radius);
     board.cells[10] = Full(P1);
+    board.display();
     assert_eq!(board.maybe_get_winner(idx_to_move(10, P1)), None);
     board.cells[11] = Full(P1);
     board.cells[12] = Full(P1);
@@ -165,7 +167,7 @@ fn test_maybe_get_winner() {
     assert_eq!(board.maybe_get_winner(idx_to_move(13, P1)), Some(P1));
 
     // cols (looks like top-left to bot-right on the displayed board)
-    board = FourNotThreeBoard::new(size);
+    board = FourNotThreeBoard::new(radius);
     board.cells[6] = Full(P1);
     board.cells[11] = Full(P1);
     board.cells[16] = Full(P1);
@@ -174,7 +176,7 @@ fn test_maybe_get_winner() {
     assert_eq!(board.maybe_get_winner(idx_to_move(21, P1)), Some(P1));
 
     // diag (top-right to bot-left)
-    board = FourNotThreeBoard::new(size);
+    board = FourNotThreeBoard::new(radius);
     board.cells[9] = Full(P1);
     board.cells[13] = Full(P1);
     board.cells[17] = Full(P1);
