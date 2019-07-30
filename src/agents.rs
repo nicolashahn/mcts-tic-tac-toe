@@ -487,6 +487,10 @@ where
             .try_fold(0usize, |acc, c| acc.checked_add(c.size_of_tree()))
             .unwrap()
     }
+
+    fn draws(&self) -> usize {
+        self.visits - self.wins - self.losses
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -512,7 +516,7 @@ where
     GB: GameBoard<RCPMove>,
 {
     fn choose_move(&mut self, board: &GB) -> RCPMove {
-        println!("{:?} MCTSAgent is thinking...", self.player);
+        println!("{:?} MCTSAgent is thinking...\n", self.player);
         let theoretical_board = board.clone();
         self.search(&theoretical_board)
     }
@@ -613,15 +617,23 @@ Playout rate:     {:.2}/sec",
     fn get_best_move_and_promote_child(&mut self) -> GM {
         let (mut best_win_r, mut best_loss_r) = (0., f64::powf(2., 64.));
         let mut best_moves: Vec<GM> = vec![];
+        println!("(move: visits, wins, draws, losses, win ratio, draw ratio, loss ratio)");
         for (&move_, child) in self.root.children.iter() {
-            let (node_win_r, node_loss_r) = (
+            let (node_win_r, node_loss_r, node_draw_r) = (
                 child.wins as f64 / child.visits as f64,
                 child.losses as f64 / child.visits as f64,
+                child.draws() as f64 / child.visits as f64,
             );
             println!(
-                "Evaluating move {:?}:
-    wins: {}, losses: {}, visits: {}, win ratio: {}, loss ratio: {}",
-                move_, child.wins, child.losses, child.visits, node_win_r, node_loss_r
+                "{:?}: V: {}, W: {}, D: {}, L: {}, WR: {}, DR: {}, LR: {}",
+                move_,
+                child.visits,
+                child.wins,
+                child.draws(),
+                child.losses,
+                node_win_r,
+                node_draw_r,
+                node_loss_r
             );
             // First, choose the move that leads to the fewest losses
             if node_loss_r < best_loss_r {
