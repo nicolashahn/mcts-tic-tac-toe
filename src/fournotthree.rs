@@ -93,7 +93,7 @@ impl FourNotThreeBoard {
 
     /// Check the game board to see if a player has won, and return who did if so.
     fn maybe_get_winner(&self, move_: RCPMove) -> Option<Player> {
-        fn get_filtered_cells(cells: &[Cell], filter_fn: &Fn(usize) -> bool) -> Vec<Cell> {
+        fn get_line_cells(cells: &[Cell], filter_fn: &Fn(usize) -> bool) -> Vec<Cell> {
             let mut filtered_cells = vec![];
             for i in 0..cells.len() {
                 if filter_fn(i) {
@@ -110,13 +110,23 @@ impl FourNotThreeBoard {
         // Someone winning via four in a row takes precedence over someone losing via three in a
         // row, so we check for that first
         for for_win in &[true, false] {
-            let row_cells = get_filtered_cells(&self.cells, &|i| i / self.size == row);
-            let col_cells = get_filtered_cells(&self.cells, &|i| i % self.size == col);
-            let diag_cells = get_filtered_cells(&self.cells, &|i| {
-                (usize::max(i, move_i) - usize::min(i, move_i)) % (self.size - 1) == 0
+            let row_cells = get_line_cells(&self.cells, &|i| i / self.size == row);
+            let col_cells = get_line_cells(&self.cells, &|i| i % self.size == col);
+            let diag_cells = get_line_cells(&self.cells, &|i| {
+                let in_diag =
+                    (usize::max(i, move_i) - usize::min(i, move_i)) % (self.size - 1) == 0;
+                // If we're on the edge of the board, we don't want the in_diag filter to wrap
+                // around to the other side (for a size=5 board, in_diag alone on move_i=2 would
+                // return cells 2,6,10,14,18,22 where there should be a disconnect at 10 and 14)
+                if i % (self.size - 1) == (self.size / 2) {
+                    let center_i = (self.size * self.size) / 2;
+                    return in_diag && (i < center_i) == (move_i < center_i);
+                }
+
+                in_diag
             });
-            for cells in vec![row_cells, col_cells, diag_cells] {
-                if let Some(winner) = FourNotThreeBoard::check_line(&cells, *for_win) {
+            for cells in vec![&row_cells, &col_cells, &diag_cells] {
+                if let Some(winner) = FourNotThreeBoard::check_line(cells, *for_win) {
                     return Some(winner);
                 }
             }
@@ -183,6 +193,30 @@ fn test_maybe_get_winner() {
     assert_eq!(board.maybe_get_winner(idx_to_move(17, P1)), Some(P2));
     board.cells[21] = Full(P1);
     assert_eq!(board.maybe_get_winner(idx_to_move(21, P1)), Some(P1));
+
+    // diags do not wrap around to the other side of the board
+    board = FourNotThreeBoard::new(radius);
+    board.cells[6] = Full(P1);
+    board.cells[10] = Full(P1);
+    board.cells[14] = Full(P1);
+    board.cells[18] = Full(P1);
+    assert_eq!(board.maybe_get_winner(idx_to_move(14, P1)), None);
+
+    // test above for larger board as well
+    board = FourNotThreeBoard::new(radius + 1);
+    board.cells[15] = Full(P1);
+    board.cells[21] = Full(P1);
+    board.cells[27] = Full(P1);
+    board.cells[33] = Full(P1);
+    assert_eq!(board.maybe_get_winner(idx_to_move(33, P1)), None);
+
+    // but make sure we can still get a 4 in a row on the edge
+    board = FourNotThreeBoard::new(radius + 1);
+    board.cells[27] = Full(P1);
+    board.cells[33] = Full(P1);
+    board.cells[39] = Full(P1);
+    board.cells[45] = Full(P1);
+    assert_eq!(board.maybe_get_winner(idx_to_move(45, P1)), Some(P1));
 }
 
 impl fmt::Debug for FourNotThreeBoard {
