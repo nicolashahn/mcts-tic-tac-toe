@@ -345,6 +345,8 @@ where
     // Mapping of the valid moves from this board state to the child TreeNodes. This should be
     // empty if the node represents an end state.
     children: HashMap<GM, TreeNode<GM, GB>>,
+    // Exploration constant for UCT, inherited from MCTSAgent
+    exploration_constant: f64,
 }
 
 impl<GM, GB> TreeNode<GM, GB>
@@ -381,6 +383,7 @@ where
             wins: 0,
             losses: 0,
             children: HashMap::new(),
+            exploration_constant: parent.exploration_constant,
         };
         node.update_from_endstate(endstate);
 
@@ -438,6 +441,31 @@ where
         }
     }
 
+    /// Get the exploration score as defined by the UCT formula:
+    /// http://mcts.ai/about/
+    /// This gives us a weighting for how much effort we should expend exploring this node vs.
+    /// others.
+    fn get_exploration_score(&self, exploration_constant: f64, move_: &GM) -> f64 {
+        // Ratio of simulations from the given node that we didn't lose
+        let get_node_not_loss_ratio = |n: &TreeNode<GM, GB>| {
+            1. - (n.losses as f64 / n.visits as f64) - (0.5 * (n.draws() as f64 / n.visits as f64))
+        };
+        // UCB/UCT formula
+        let calculate_uct = |score: f64, c_visits: usize, p_visits: usize| {
+            score + exploration_constant * (f64::ln(p_visits as f64) / c_visits as f64)
+        };
+        match self.children.get(&move_) {
+            Some(child) => {
+                if child.is_fully_expanded {
+                    0.
+                } else {
+                    calculate_uct(get_node_not_loss_ratio(&child), child.visits, self.visits)
+                }
+            }
+            None => exploration_constant,
+        }
+    }
+
     /// One round of tree expansion. Follow a path down until we get to a leaf that is not an
     /// end state, then playout until we hit an end state, creating more nodes as we go, and
     /// updating the parents back up after we reach the end state node.
@@ -448,9 +476,7 @@ where
             return Draw;
         }
 
-        let mut rng = thread_rng();
         let mut moves = self.board.get_valid_moves();
-        moves.shuffle(&mut rng);
         for move_ in moves.iter() {
             if self.children.get(&move_).is_none() {
                 // we have a move that we don't have a child node for
@@ -461,10 +487,18 @@ where
                 return endstate;
             }
         }
-
         // if we got here, all children have been visited, so we need to visit their children
-        for move_ in moves.iter() {
-            let child = self.children.get_mut(&move_).unwrap();
+
+        // use UCT to choose which nodes to expand
+        moves.sort_by(|m1, m2| {
+            self.get_exploration_score(self.exploration_constant, m1)
+                .partial_cmp(&self.get_exploration_score(self.exploration_constant, m2))
+                .unwrap()
+        });
+
+        while !moves.is_empty() {
+            let best_move = moves.pop().unwrap();
+            let child = self.children.get_mut(&best_move).unwrap();
             if !child.is_fully_expanded {
                 let endstate = child.expand();
                 self.update_from_endstate(endstate);
@@ -537,6 +571,8 @@ where
             wins: 0,
             losses: 0,
             children: HashMap::new(),
+            // TODO allow this to be passed in as a parameter
+            exploration_constant: DEFAULT_EXPLORATION_CONSTANT,
         };
         MCTSAgent {
             player,
@@ -625,15 +661,15 @@ Playout rate:     {:.2}/sec",
                 child.draws() as f64 / child.visits as f64,
             );
             println!(
-                "{:?}: V: {}, W: {}, D: {}, L: {}, WR: {}, DR: {}, LR: {}",
+                "{:?}: V: {}, W: {}, L: {}, D: {}, WR: {}, LR: {}, DR: {}",
                 move_,
                 child.visits,
                 child.wins,
-                child.draws(),
                 child.losses,
+                child.draws(),
                 node_win_r,
+                node_loss_r,
                 node_draw_r,
-                node_loss_r
             );
             // First, choose the move that leads to the fewest losses
             if node_loss_r < best_loss_r {
