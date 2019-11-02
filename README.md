@@ -77,7 +77,8 @@ P2 MCTSAgent is thinking...
 ## TODO:
 - Use [UCT](https://link.springer.com/chapter/10.1007%2F11871842_29) to choose nodes to
   expand 
-- Add multithreading to MCTSAgent as well
+- Allow MCTSAgent to create threads inside nested child nodes, not just at the root
+  level, otherwise we're not utilizing our possible maximum playouts
 - Detect symmetrical game states
 - Tree pruning heuristics
   - Example: explore moves that block the opponent from getting (board size - 1) pieces
