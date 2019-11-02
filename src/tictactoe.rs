@@ -165,7 +165,7 @@ impl TicTacToeBoard {
         }
     }
     /// Return if the line defined by the filter_fn is filled with cells of type player.
-    fn player_fills_line(&self, player: Player, filter_fn: &Fn(usize) -> bool) -> bool {
+    fn player_fills_line(&self, player: Player, filter_fn: &dyn Fn(usize) -> bool) -> bool {
         let mut player_count = 0;
         for i in 0..self.size * self.size {
             if filter_fn(i) {

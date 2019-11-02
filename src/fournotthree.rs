@@ -93,11 +93,11 @@ impl FourNotThreeBoard {
 
     /// Check the game board to see if a player has won, and return who did if so.
     fn maybe_get_winner(&self, move_: RCPMove) -> Option<Player> {
-        fn get_line_cells(cells: &[Cell], filter_fn: &Fn(usize) -> bool) -> Vec<Cell> {
+        fn get_line_cells(cells: &[Cell], filter_fn: &dyn Fn(usize) -> bool) -> Vec<Cell> {
             let mut filtered_cells = vec![];
-            for i in 0..cells.len() {
+            for (i, &c) in cells.iter().enumerate() {
                 if filter_fn(i) {
-                    filtered_cells.push(cells[i]);
+                    filtered_cells.push(c);
                 }
             }
 
@@ -125,7 +125,7 @@ impl FourNotThreeBoard {
 
                 in_diag
             });
-            for cells in vec![&row_cells, &col_cells, &diag_cells] {
+            for cells in [&row_cells, &col_cells, &diag_cells].iter() {
                 if let Some(winner) = FourNotThreeBoard::check_line(cells, *for_win) {
                     return Some(winner);
                 }

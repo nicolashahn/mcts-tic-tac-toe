@@ -16,13 +16,11 @@ use rand::thread_rng;
 use scoped_threadpool::Pool;
 
 use crate::board_game;
-use crate::tictactoe;
 
 use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
 use board_game::Player::{P1, P2};
 use board_game::{EndState, GameBoard, GameMove, Player, RCPMove, ALPHABET};
-use tictactoe::TicTacToeBoard;
 
 /*
  * -----------
@@ -126,7 +124,7 @@ impl RandomAgent {
     pub fn get_random_move_choice<GM: GameMove>(board: &impl GameBoard<GM>) -> GM {
         let valid_moves = board.get_valid_moves();
         let mut rng = thread_rng();
-        (*valid_moves.choose(&mut rng).unwrap()).clone()
+        *valid_moves.choose(&mut rng).unwrap()
     }
 }
 
@@ -434,8 +432,8 @@ where
                 .children
                 .values()
                 .filter(|&c| !c.is_fully_expanded)
-                .collect::<Vec<&TreeNode<GM, GB>>>()
-                .is_empty()
+                .count()
+                == 0
         {
             self.is_fully_expanded = true;
         }
@@ -601,7 +599,7 @@ where
         let mut pool = Pool::new(num_cpus::get() as u32);
         pool.scoped(|scoped| {
             let playout_budget = self.playout_budget;
-            for (_, child) in &mut self.root.children {
+            for child in self.root.children.values_mut() {
                 scoped.execute(move || {
                     for _ in 0..playout_budget / num_moves {
                         child.expand();
@@ -653,7 +651,9 @@ Playout rate:     {:.2}/sec",
     fn get_best_move_and_promote_child(&mut self) -> GM {
         let (mut best_win_r, mut best_loss_r) = (0., f64::powf(2., 64.));
         let mut best_moves: Vec<GM> = vec![];
-        println!("(move: visits, wins, draws, losses, win ratio, draw ratio, loss ratio)");
+        println!(
+            "(move: visits (V), wins (W), losses (L), draws (D), win ratio (WR), loss ratio (LR), draw ratio (DR))"
+        );
         for (&move_, child) in self.root.children.iter() {
             let (node_win_r, node_loss_r, node_draw_r) = (
                 child.wins as f64 / child.visits as f64,
@@ -700,6 +700,8 @@ Playout rate:     {:.2}/sec",
 /// agent can always calculate it within 5000 playouts.
 #[test]
 fn test_mcts_agent_tic_tac_toe_first_move() {
+    use crate::tictactoe;
+    use tictactoe::TicTacToeBoard;
     let board = TicTacToeBoard::new(3);
     let mut agent = MCTSAgent::new(P1, 5000, board.clone());
     let move_ = agent.search(&board);
