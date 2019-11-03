@@ -407,8 +407,10 @@ fn test_mcts_agent_tic_tac_toe_first_move() {
     use board_game::Player::P1;
     use tictactoe::TicTacToeBoard;
 
-    let board = TicTacToeBoard::new(3);
-    let mut agent = MCTSAgent::new(P1, 5000, board.clone());
-    let move_ = agent.search(&board);
-    assert!(move_ == (1, 1, P1));
+    for _ in 0..5 {
+        let board = TicTacToeBoard::new(3);
+        let mut agent = MCTSAgent::new(P1, 5000, board.clone());
+        let move_ = agent.search(&board);
+        assert!(move_ == (1, 1, P1));
+    }
 }
