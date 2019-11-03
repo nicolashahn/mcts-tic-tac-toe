@@ -20,9 +20,9 @@ fn main() -> io::Result<()> {
     //let board = TicTacToeBoard::new(BOARD_SIZE);
     let board = FourNotThreeBoard::new(BOARD_SIZE);
 
-    //let agent1 = HumanAgent::new(Player::P1);
+    let agent1 = HumanAgent::new(Player::P1);
     // Uncomment the following line to see two AI agents play each other:
-    let agent1 = MCTSAgent::new(Player::P1, PLAYOUT_BUDGET, board.clone());
+    //let agent1 = MCTSAgent::new(Player::P1, PLAYOUT_BUDGET, board.clone());
 
     let agent2 = MCTSAgent::new(Player::P2, PLAYOUT_BUDGET, board.clone());
 
