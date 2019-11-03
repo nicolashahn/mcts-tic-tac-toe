@@ -12,7 +12,7 @@ use rand::thread_rng;
 use scoped_threadpool::Pool;
 
 use crate::agents::BoardGameAgent;
-use crate::board_game;
+use crate::games::board_game;
 
 use board_game::EndState::{Draw, Winner};
 use board_game::GameState::{Ended, Ongoing};
@@ -403,7 +403,7 @@ Playout rate:     {:.2}/sec",
 /// agent can always calculate it within 5000 playouts.
 #[test]
 fn test_mcts_agent_tic_tac_toe_first_move() {
-    use crate::tictactoe;
+    use crate::games::tictactoe;
     use board_game::Player::P1;
     use tictactoe::TicTacToeBoard;
 

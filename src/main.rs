@@ -3,7 +3,9 @@
 /// Command line interface for playing tic-tac-toe against an AI.
 use std::io;
 
-use mcts::{agents, board_game, fournotthree, play, tictactoe};
+use mcts::{agents, games, play};
+
+use games::{board_game, fournotthree, tictactoe};
 
 use agents::{ForgetfulSearchAgent, HumanAgent, MCTSAgent, RandomAgent};
 use board_game::{GameBoard, Player};
