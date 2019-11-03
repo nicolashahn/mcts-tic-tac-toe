@@ -51,8 +51,10 @@ where
     fn choose_move(&mut self, _board: &GB) -> RCPMove {
         loop {
             println!("Enter a move (like \"a0\"):");
-            match self.get_move() {
-                Ok((row, col)) => return (row, col, self.player),
+            match self.get_user_input() {
+                Ok(move_) => {
+                    return move_;
+                }
                 Err(_) => {
                     println!("Oops, enter valid input");
                 }
@@ -65,12 +67,24 @@ impl HumanAgent {
     pub fn new(player: Player) -> HumanAgent {
         HumanAgent { player }
     }
+}
 
+/// Trait that translates user input into a GameMove.
+pub trait GetsUserInput<GM>
+where
+    GM: GameMove,
+{
+    /// Receive input from the user and translate it into a GameMove.
+    fn get_user_input(&self) -> Result<GM, &'static str>;
+}
+
+/// Currently, the only move type for HumanAgents implemented is RCPMove.
+impl GetsUserInput<RCPMove> for HumanAgent {
     /// Accept player input from stdin, parse into (row, col) indexes.
     /// Columns are letter indexes, rows are integers.
     /// Example: "a2" means column 0, row 2
     /// TODO allow multi-digit row input to boost maximum grid size from 10 to 26
-    fn get_move(&self) -> Result<(usize, usize), &'static str> {
+    fn get_user_input(&self) -> Result<RCPMove, &'static str> {
         let mut input = String::new();
         if io::stdin().read_line(&mut input).is_err() {
             return Err(BAD_INPUT);
@@ -91,7 +105,7 @@ impl HumanAgent {
             None => return Err(BAD_INPUT),
         };
 
-        Ok((row, col))
+        Ok((row, col, self.player))
     }
 }
 
@@ -107,11 +121,12 @@ pub struct RandomAgent {
     player: Player,
 }
 
-impl<GB> BoardGameAgent<RCPMove, GB> for RandomAgent
+impl<GM, GB> BoardGameAgent<GM, GB> for RandomAgent
 where
-    GB: GameBoard<RCPMove>,
+    GM: GameMove,
+    GB: GameBoard<GM>,
 {
-    fn choose_move(&mut self, board: &GB) -> RCPMove {
+    fn choose_move(&mut self, board: &GB) -> GM {
         Self::get_random_move_choice(board)
     }
 }
@@ -168,11 +183,12 @@ pub struct ForgetfulSearchAgent {
     playout_budget: usize,
 }
 
-impl<GB> BoardGameAgent<RCPMove, GB> for ForgetfulSearchAgent
+impl<GM, GB> BoardGameAgent<GM, GB> for ForgetfulSearchAgent
 where
-    GB: GameBoard<RCPMove>,
+    GM: GameMove,
+    GB: GameBoard<GM>,
 {
-    fn choose_move(&mut self, board: &GB) -> RCPMove {
+    fn choose_move(&mut self, board: &GB) -> GM {
         let theoretical_board = board.clone();
         self._choose_move(&theoretical_board)
     }
@@ -543,11 +559,12 @@ where
     exploration_constant: f64,
 }
 
-impl<GB> BoardGameAgent<RCPMove, GB> for MCTSAgent<RCPMove, GB>
+impl<GM, GB> BoardGameAgent<GM, GB> for MCTSAgent<GM, GB>
 where
-    GB: GameBoard<RCPMove>,
+    GM: GameMove,
+    GB: GameBoard<GM>,
 {
-    fn choose_move(&mut self, board: &GB) -> RCPMove {
+    fn choose_move(&mut self, board: &GB) -> GM {
         println!("{:?} MCTSAgent is thinking...\n", self.player);
         let theoretical_board = board.clone();
         self.search(&theoretical_board)
