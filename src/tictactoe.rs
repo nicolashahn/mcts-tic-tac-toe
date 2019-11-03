@@ -182,26 +182,17 @@ impl TicTacToeBoard {
 
     /// Did the last move played at (row, col) by player win the game?
     fn move_wins_game(&self, row: usize, col: usize, player: Player) -> bool {
-        // check row
-        if self.player_fills_line(player, &|i| i / self.size == row) {
-            return true;
-        }
+        let row_check = &|i: usize| i / self.size == row;
+        let col_check = &|i: usize| i % self.size == col;
+        // top left to bottom right diagonal: \
+        let down_diag_check = &|i: usize| i % self.size == i / self.size;
+        // bottom left to top right diagonal: /
+        let up_diag_check = &|i: usize| (i % self.size) + (i / self.size) == self.size - 1;
 
-        // check col
-        if self.player_fills_line(player, &|i| i % self.size == col) {
-            return true;
-        }
-
-        // check \ diag
-        if row == col && self.player_fills_line(player, &|i| i % self.size == i / self.size) {
-            return true;
-        }
-
-        // check / diag
-        if row + col == self.size - 1
-            && self.player_fills_line(player, &|i| {
-                (i % self.size) + (i / self.size) == self.size - 1
-            })
+        if self.player_fills_line(player, row_check)
+            || self.player_fills_line(player, col_check)
+            || row == col && self.player_fills_line(player, down_diag_check)
+            || row + col == self.size - 1 && self.player_fills_line(player, up_diag_check)
         {
             return true;
         }
@@ -292,6 +283,7 @@ fn test_undo_move() {
     assert_eq!(Err(NO_MOVE_TO_UNDO), board.undo_move());
 }
 
+#[allow(unused_must_use)]
 #[test]
 fn test_is_p1_turn() {
     let size = 3;
