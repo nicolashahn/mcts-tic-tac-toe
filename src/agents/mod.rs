@@ -1,6 +1,4 @@
 /// Agents for TicTacToe.
-extern crate rand;
-
 mod mcts_agent;
 pub use mcts_agent::MCTSAgent;
 

@@ -1,7 +1,4 @@
 /// Monte Carlo tree search agent.
-extern crate num_cpus;
-extern crate scoped_threadpool;
-
 use std::collections::HashMap;
 use std::f64;
 use std::time::Instant;
