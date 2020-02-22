@@ -201,7 +201,7 @@ impl ForgetfulSearchAgent {
 
     /// Agent chooses the best available move
     #[allow(clippy::explicit_counter_loop)]
-    fn _choose_move<GM: GameMove>(&mut self, board: &(impl GameBoard<GM>)) -> GM {
+    fn _choose_move<GM: GameMove>(&mut self, board: &impl GameBoard<GM>) -> GM {
         println!("{:?} ForgetfulSearchAgent is thinking...", self.player);
         let valid_moves = board.get_valid_moves();
         let num_moves = valid_moves.len();
