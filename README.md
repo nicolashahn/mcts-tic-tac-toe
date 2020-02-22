@@ -75,8 +75,6 @@ P2 MCTSAgent is thinking...
 ```
 
 ## TODO:
-- Use [UCT](https://link.springer.com/chapter/10.1007%2F11871842_29) to choose nodes to
-  expand 
 - Allow MCTSAgent to create threads inside nested child nodes, not just at the root
   level, otherwise we're not utilizing our possible maximum playouts
 - Detect symmetrical game states

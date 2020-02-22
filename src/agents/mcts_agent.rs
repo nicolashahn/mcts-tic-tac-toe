@@ -139,7 +139,7 @@ where
     }
 
     /// Get the exploration score as defined by the UCT formula:
-    /// http://mcts.ai/about/
+    /// https://www.chessprogramming.org/UCT
     /// This gives us a weighting for how much effort we should expend exploring this node vs.
     /// others.
     fn get_exploration_score(&self, exploration_constant: f64, move_: &GM) -> f64 {
@@ -147,7 +147,7 @@ where
         let get_node_not_loss_ratio = |n: &TreeNode<GM, GB>| {
             1. - (n.losses as f64 / n.visits as f64) - (0.5 * (n.draws() as f64 / n.visits as f64))
         };
-        // UCB/UCT formula
+        // UCT formula
         let calculate_uct = |score: f64, c_visits: usize, p_visits: usize| {
             score + exploration_constant * (f64::ln(p_visits as f64) / c_visits as f64)
         };
@@ -166,7 +166,6 @@ where
     /// One round of tree expansion. Follow a path down until we get to a leaf that is not an
     /// end state, then playout until we hit an end state, creating more nodes as we go, and
     /// updating the parents back up after we reach the end state node.
-    /// TODO use UCT formula to choose child to expand
     fn expand(&mut self) -> EndState {
         if self.is_fully_expanded {
             // TODO this is a hack, do something more correct here
