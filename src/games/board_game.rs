@@ -1,6 +1,7 @@
 /// Generic board game interface.
-use std::fmt;
+use std::fmt::Debug;
 use std::hash::Hash;
+use std::marker::Sized;
 
 use Player::{P1, P2};
 
@@ -53,14 +54,14 @@ pub enum Cell {
 
 /// A move in a (board) game, an action that an agent can take when it is their turn. For example,
 /// a Tic Tac Toe move can be represented as (row, column, player).
-pub trait GameMove: fmt::Debug + Send + Sync + Clone + Copy + Eq + Hash + 'static {
+pub trait GameMove: Debug + Send + Sync + Clone + Copy + Eq + Hash + 'static {
     /// Get the player that is making this move.
     fn player(&self) -> Player;
     fn set_player(&mut self, p: Player);
 }
 
 /// Functionality associated with any two player board-game-like object.
-pub trait GameBoard<GM>: Clone + fmt::Debug + Send + Sync + std::marker::Sized + 'static
+pub trait GameBoard<GM>: Clone + Debug + Send + Sync + Sized + 'static
 where
     GM: GameMove,
 {
